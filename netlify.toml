@@ -1,5 +1,5 @@
 [build]
-  publish = "site"
+  base = "site"
 
 [[headers]]
   for = "/*"
