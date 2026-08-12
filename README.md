@@ -57,6 +57,14 @@ sudo apt install cifs-utils smbclient avahi-utils
 
 ## Install
 
+**Pre-built binary** (no Go required):
+
+```bash
+curl -fsSL https://smbark.z19r.com/install.sh | sh
+```
+
+Detects your architecture (x86_64 / ARM64) and installs to `/usr/local/bin`.
+
 **With Go:**
 
 ```bash
@@ -168,6 +176,10 @@ just check      # go vet + build
 just fmt        # gofmt -w .
 just lint       # golangci-lint
 just tidy       # go mod tidy
+just test       # run all tests
+just pre-commit # fmt + vet + build
+just ci-local   # lint-all + test
+just info       # show toolchain versions
 just loc        # line count
 ```
 
@@ -178,6 +190,33 @@ just site-dev      # serve locally on :8080
 just site-preview  # Netlify draft deploy
 just site-deploy   # Netlify production deploy
 ```
+
+## Releasing
+
+Releases are cut from `main` using the justfile. The `release` recipe bumps the version in `VERSION`, auto-generates a changelog entry from conventional commits, opens a PR, waits for CI, merges, and tags.
+
+```bash
+just release-dry-run patch   # preview without changing anything
+just release patch           # patch release (0.1.0 → 0.1.1)
+just release minor           # minor release (0.1.1 → 0.2.0)
+just release major           # major release (0.2.0 → 1.0.0)
+```
+
+The full flow:
+
+1. Runs the quality gate (`gofmt` check, `go vet`, `go test`)
+2. Bumps the semver in `VERSION`
+3. Generates a changelog section from conventional commits since the last tag
+4. Creates a `release/vX.Y.Z` branch, commits, and pushes
+5. Opens a PR against `main` via `gh`
+6. Watches CI (if configured), then squash-merges
+7. Tags `vX.Y.Z` on `main` and pushes the tag
+8. Cross-compiles binaries for `linux/amd64` and `linux/arm64`
+9. Creates a GitHub release with the binaries attached
+
+Requires [`gh`](https://cli.github.com/) to be installed and authenticated.
+
+Pre-built binaries are available on the [releases page](https://github.com/z19r/smbark/releases).
 
 ## Project layout
 

@@ -110,17 +110,21 @@
 
         <div class="install-panel" data-tabs>
           <div class="install-tabs" role="tablist" aria-label="Install method">
-            <button class="is-active" type="button" role="tab" aria-selected="true" data-install-tab="omarchy">Omarchy</button>
-            <button type="button" role="tab" aria-selected="false" data-install-tab="arch">Arch Linux</button>
-            <button type="button" role="tab" aria-selected="false" data-install-tab="debian">Debian / Ubuntu</button>
-            <button type="button" role="tab" aria-selected="false" data-install-tab="source">From source</button>
+            <button class="is-active" type="button" role="tab" aria-selected="true" data-install-tab="source">From source</button>
+            <button type="button" role="tab" aria-selected="false" data-install-tab="binary">Binary</button>
+            <button type="button" role="tab" aria-selected="false" data-install-tab="omarchy">Omarchy</button>
           </div>
-          <div class="command-wrap">
-            <pre><code data-install-code>omarchy install smbark</code></pre>
+          <div class="command-wrap" data-install-command>
+            <pre><code data-install-code>go install github.com/z19r/smbark@latest</code></pre>
+
             <button class="copy-button" type="button" data-copy-install aria-label="Copy install command">Copy</button>
           </div>
+          <div class="download-links" data-download-links style="display:none">
+            <a href="https://github.com/z19r/smbark/releases/latest/download/smbark-linux-amd64">x86_64</a>
+            <a href="https://github.com/z19r/smbark/releases/latest/download/smbark-linux-arm64">ARM64</a>
+            <span class="fine-print">or grab from <a href="https://github.com/z19r/smbark/releases">all releases</a></span>
+          </div>
         </div>
-        <p class="fine-print">Install commands are isolated in <code>js/app.js</code> so they’re easy to replace with the final package/repo details.</p>
       </div>
 
       <div id="usage">
