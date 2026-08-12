@@ -270,21 +270,9 @@ release LEVEL: release-check
     git pull --ff-only origin main
     git tag -a "v${VERSION}" -m "v${VERSION}"
     git push origin "v${VERSION}"
-    echo "Building release binaries..."
-    mkdir -p dist
-    LDFLAGS="-s -w"
-    GOOS=linux GOARCH=amd64 go build -ldflags="$LDFLAGS" -o "dist/smbark-linux-amd64" .
-    GOOS=linux GOARCH=arm64 go build -ldflags="$LDFLAGS" -o "dist/smbark-linux-arm64" .
-    echo "Creating GitHub release..."
-    gh release create "v${VERSION}" \
-        dist/smbark-linux-amd64 \
-        dist/smbark-linux-arm64 \
-        --title "v${VERSION}" \
-        --notes-file <(sed -n "/^## \[${VERSION}\]/,/^## \[/{/^## \[${VERSION}\]/d;/^## \[/d;p}" CHANGELOG.md)
-    rm -rf dist
     echo ""
-    echo "Release v${VERSION} complete."
-    echo "  https://github.com/z19r/smbark/releases/tag/v${VERSION}"
+    echo "Release v${VERSION} tagged. GitHub Actions will build binaries and create the release."
+    echo "  https://github.com/z19r/smbark/actions"
 
 # ─── Cleanup ─────────────────────────────────────────────────────
 
