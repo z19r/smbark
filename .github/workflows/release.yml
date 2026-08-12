@@ -12,30 +12,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-
-      - name: Build binaries
-        run: |
-          mkdir -p dist
-          LDFLAGS="-s -w"
-          GOOS=linux GOARCH=amd64 go build -ldflags="$LDFLAGS" -o dist/smbark-linux-amd64 .
-          GOOS=linux GOARCH=arm64 go build -ldflags="$LDFLAGS" -o dist/smbark-linux-arm64 .
-
-      - name: Extract changelog
-        id: changelog
-        run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          NOTES=$(sed -n "/^## \[${VERSION}\]/,/^## \[/{/^## \[/d;p}" CHANGELOG.md)
-          echo "notes<<EOF" >> "$GITHUB_OUTPUT"
-          echo "$NOTES" >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
-
-      - name: Create release
-        uses: softprops/action-gh-release@v2
+      - uses: goreleaser/goreleaser-action@v6
         with:
-          body: ${{ steps.changelog.outputs.notes }}
-          files: |
-            dist/smbark-linux-amd64
-            dist/smbark-linux-arm64
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
