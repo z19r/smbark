@@ -1,6 +1,13 @@
 <div align="center">
   <img src="site/assets/smbark-wordmark.png" alt="SMBark" width="420">
   <p><strong>A terminal UI for discovering, mounting, and managing SMB shares on Linux.</strong></p>
+  <p>
+    <a href="https://smbark.z19r.com"><strong>smbark.z19r.com</strong></a>
+    ·
+    <a href="#install">Install</a>
+    ·
+    <a href="#usage">Usage</a>
+  </p>
 </div>
 
 ---
@@ -183,3 +190,7 @@ internal/
     components/      share list, header, dialogs, effects
 site/                landing page (static, deployed via Netlify)
 ```
+
+## License
+
+[MIT](LICENSE) © Zack Kitzmiller
