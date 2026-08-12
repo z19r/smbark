@@ -1,0 +1,11 @@
+# Compiled binary
+/smbark
+
+# Local, machine-specific tool state
+.claude/settings.local.json
+.claude/.headroom_wrap_marker.json
+.netlify/
+
+# OS cruft
+.DS_Store
+*~

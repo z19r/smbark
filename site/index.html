@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#061a2d" />
+  <meta name="description" content="SMBARK is a keyboard-driven TUI for discovering, mounting, and managing SMB/CIFS shares on Linux." />
+  <title>SMBARK — SMB Share Manager for Linux</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="css/styles.css" />
+  <script src="js/app.js" defer></script>
+</head>
+<body>
+  <div class="page-glow" aria-hidden="true"></div>
+
+  <header class="site-header">
+    <a class="brand" href="#top" aria-label="SMBARK home">
+      <img src="assets/smbark-wordmark.png" alt="SMBARK" />
+    </a>
+    <nav class="site-nav" aria-label="Primary navigation">
+      <a href="#features">Features</a>
+      <a href="#install">Install</a>
+      <a href="#usage">Usage</a>
+      <a href="#screenshots">Screenshots</a>
+      <a href="#github" data-repo-link>GitHub</a>
+    </nav>
+    <a class="header-github" href="#github" data-repo-link aria-label="Open SMBARK on GitHub">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .8A11.4 11.4 0 0 0 8.4 23c.57.1.78-.25.78-.55v-2.14c-3.18.7-3.85-1.35-3.85-1.35-.52-1.32-1.27-1.67-1.27-1.67-1.04-.71.08-.7.08-.7 1.15.08 1.75 1.18 1.75 1.18 1.02 1.75 2.68 1.24 3.33.95.1-.74.4-1.24.73-1.53-2.54-.29-5.21-1.27-5.21-5.66 0-1.25.45-2.27 1.18-3.07-.12-.29-.51-1.45.11-3.03 0 0 .96-.31 3.14 1.17A10.9 10.9 0 0 1 12 6.21c.97 0 1.94.13 2.85.38 2.18-1.48 3.14-1.17 3.14-1.17.62 1.58.23 2.74.11 3.03.74.8 1.18 1.82 1.18 3.07 0 4.4-2.68 5.36-5.23 5.65.41.36.78 1.06.78 2.14v3.17c0 .3.2.66.79.55A11.4 11.4 0 0 0 12 .8Z"/></svg>
+      <span>GitHub</span>
+    </a>
+  </header>
+
+  <main id="top">
+    <section class="hero shell">
+      <div class="hero-copy">
+        <div class="eyebrow"><span aria-hidden="true">&gt;_</span> TUI for Linux &amp; Omarchy</div>
+        <h1>Discover. Mount.<br />Manage <span class="gradient-text">SMB Shares.</span></h1>
+        <p class="lede">SMBARK is a terminal user interface for finding SMB/CIFS hosts on your network, mounting shares, and keeping automounts sane. Fast, native, keyboard-first.</p>
+        <div class="hero-actions">
+          <a class="button button-primary" href="#install">
+            <span aria-hidden="true">↓</span> Install SMBARK
+          </a>
+          <a class="button button-secondary" href="#github" data-repo-link>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .8A11.4 11.4 0 0 0 8.4 23c.57.1.78-.25.78-.55v-2.14c-3.18.7-3.85-1.35-3.85-1.35-.52-1.32-1.27-1.67-1.27-1.67-1.04-.71.08-.7.08-.7 1.15.08 1.75 1.18 1.75 1.18 1.02 1.75 2.68 1.24 3.33.95.1-.74.4-1.24.73-1.53-2.54-.29-5.21-1.27-5.21-5.66 0-1.25.45-2.27 1.18-3.07-.12-.29-.51-1.45.11-3.03 0 0 .96-.31 3.14 1.17A10.9 10.9 0 0 1 12 6.21c.97 0 1.94.13 2.85.38 2.18-1.48 3.14-1.17 3.14-1.17.62 1.58.23 2.74.11 3.03.74.8 1.18 1.82 1.18 3.07 0 4.4-2.68 5.36-5.23 5.65.41.36.78 1.06.78 2.14v3.17c0 .3.2.66.79.55A11.4 11.4 0 0 0 12 .8Z"/></svg>
+            View on GitHub
+          </a>
+        </div>
+        <div class="platforms" aria-label="Supported platforms">
+          <span>Works on</span>
+          <span class="pill">◈ Linux</span>
+          <span class="pill">⌁ Omarchy</span>
+          <span class="pill">⊞ WSL</span>
+        </div>
+      </div>
+
+      <div class="hero-carousel" id="screenshots" data-carousel>
+        <div class="carousel-chrome" aria-hidden="true">
+          <span></span><span></span><span></span>
+          <small>smbark</small>
+        </div>
+        <div class="carousel-stage" tabindex="0" aria-label="SMBARK application screenshots. Use left and right arrow keys to change screenshots.">
+          <figure class="slide is-active" data-slide>
+            <img src="assets/screenshots/discover.webp" alt="SMBARK Discover view showing an SMB host found on the local network" />
+          </figure>
+          <figure class="slide" data-slide>
+            <img src="assets/screenshots/mounted.webp" alt="SMBARK Mounted view with an empty mounted shares state" loading="lazy" />
+          </figure>
+          <figure class="slide" data-slide>
+            <img src="assets/screenshots/automount.webp" alt="SMBARK Automount view showing a configured network share" loading="lazy" />
+          </figure>
+          <figure class="slide" data-slide>
+            <img src="assets/screenshots/config.webp" alt="SMBARK Config view showing system overview, fstab entries, and connectivity status" loading="lazy" />
+          </figure>
+          <button class="carousel-arrow prev" type="button" data-prev aria-label="Previous screenshot">‹</button>
+          <button class="carousel-arrow next" type="button" data-next aria-label="Next screenshot">›</button>
+        </div>
+        <div class="carousel-tabs" role="tablist" aria-label="Screenshot view">
+          <button class="is-active" type="button" data-dot="0" role="tab" aria-selected="true">Discover</button>
+          <button type="button" data-dot="1" role="tab" aria-selected="false">Mounted</button>
+          <button type="button" data-dot="2" role="tab" aria-selected="false">Automount</button>
+          <button type="button" data-dot="3" role="tab" aria-selected="false">Config</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="feature-strip shell" id="features" aria-label="Features">
+      <article class="feature">
+        <div class="feature-icon">◎</div>
+        <div><h2>Discover on the LAN</h2><p>Scan the network and find SMB servers and shares without memorizing IPs.</p></div>
+      </article>
+      <article class="feature">
+        <div class="feature-icon">▣</div>
+        <div><h2>Mount without ceremony</h2><p>Mount, unmount, and inspect shares without dropping out to a pile of shell commands.</p></div>
+      </article>
+      <article class="feature">
+        <div class="feature-icon">ϟ</div>
+        <div><h2>Automounts that behave</h2><p>Promote shares into automounts and keep the persistent stuff in one obvious place.</p></div>
+      </article>
+      <article class="feature">
+        <div class="feature-icon">⚙</div>
+        <div><h2>Actually inspectable</h2><p>See mounted shares, CIFS/fstab state, discovered hosts, and connectivity at a glance.</p></div>
+      </article>
+    </section>
+
+    <section class="two-col shell section" id="install">
+      <div>
+        <div class="section-kicker">INSTALL</div>
+        <h2>Get mounted.</h2>
+        <p class="section-copy">No Electron. No web server hiding behind a terminal window. Pick your environment and get on with it.</p>
+
+        <div class="install-panel" data-tabs>
+          <div class="install-tabs" role="tablist" aria-label="Install method">
+            <button class="is-active" type="button" role="tab" aria-selected="true" data-install-tab="omarchy">Omarchy</button>
+            <button type="button" role="tab" aria-selected="false" data-install-tab="arch">Arch Linux</button>
+            <button type="button" role="tab" aria-selected="false" data-install-tab="debian">Debian / Ubuntu</button>
+            <button type="button" role="tab" aria-selected="false" data-install-tab="source">From source</button>
+          </div>
+          <div class="command-wrap">
+            <pre><code data-install-code>omarchy install smbark</code></pre>
+            <button class="copy-button" type="button" data-copy-install aria-label="Copy install command">Copy</button>
+          </div>
+        </div>
+        <p class="fine-print">Install commands are isolated in <code>js/app.js</code> so they’re easy to replace with the final package/repo details.</p>
+      </div>
+
+      <div id="usage">
+        <div class="section-kicker">QUICK START</div>
+        <h2>Keyboard in. Problem out.</h2>
+        <div class="terminal-card">
+          <div class="terminal-title"><span>●</span><span>●</span><span>●</span><small>quick-start.sh</small></div>
+          <pre><code><span class="muted"># Launch the TUI</span>
+smbark
+
+<span class="muted"># Discover hosts</span>
+smbark scan
+
+<span class="muted"># Open help anywhere in the TUI</span>
+?</code></pre>
+        </div>
+        <div class="keys">
+          <span><kbd>tab</kbd> switch view</span>
+          <span><kbd>enter</kbd> browse</span>
+          <span><kbd>/</kbd> filter</span>
+          <span><kbd>?</kbd> help</span>
+          <span><kbd>q</kbd> quit</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="details shell section" id="github">
+      <div class="details-copy">
+        <div class="section-kicker">WHY SMBARK</div>
+        <h2>A share manager that looks like it belongs on Linux.</h2>
+        <p>SMB management has spent decades bouncing between inscrutable incantations and giant desktop control panels. SMBARK lives in the useful middle: visible state, explicit actions, zero mouse dependency.</p>
+      </div>
+      <div class="detail-grid">
+        <div><strong>01</strong><span>Discover</span><p>Find hosts and shares on the network.</p></div>
+        <div><strong>02</strong><span>Mount</span><p>Bring shares online and see what’s already mounted.</p></div>
+        <div><strong>03</strong><span>Automount</span><p>Keep the shares you actually use available.</p></div>
+        <div><strong>04</strong><span>Inspect</span><p>Understand the CIFS state of the machine.</p></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer shell">
+    <img src="assets/smbark-wordmark.png" alt="" aria-hidden="true" />
+    <p>SMB share management for people who already have a terminal open.</p>
+    <a href="#github" data-repo-link>GitHub ↗</a>
+  </footer>
+</body>
+</html>
