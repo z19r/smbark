@@ -47,24 +47,25 @@
     }, { passive: true });
   }
 
-  // Intentionally easy to swap when package names/commands are final.
   const installCommands = {
+    binary: 'curl -fsSL https://smbark.z19r.com/install.sh | sh',
     omarchy: 'omarchy install smbark',
-    arch: 'yay -S smbark',
-    debian: 'sudo apt install smbark',
-    source: 'go install github.com/YOUR_GITHUB/smbark@latest'
+    source: 'go install github.com/z19r/smbark@latest'
   };
 
   const installCode = document.querySelector('[data-install-code]');
+  const downloadLinks = document.querySelector('[data-download-links]');
   const installTabs = [...document.querySelectorAll('[data-install-tab]')];
   installTabs.forEach((tab) => {
     tab.addEventListener('click', () => {
+      const key = tab.dataset.installTab;
       installTabs.forEach((item) => {
         const active = item === tab;
         item.classList.toggle('is-active', active);
         item.setAttribute('aria-selected', String(active));
       });
-      installCode.textContent = installCommands[tab.dataset.installTab];
+      installCode.textContent = installCommands[key];
+      if (downloadLinks) downloadLinks.style.display = key === 'binary' ? '' : 'none';
     });
   });
 

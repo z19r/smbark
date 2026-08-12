@@ -1,5 +1,6 @@
 # Compiled binary
 /smbark
+/dist/
 
 # Local, machine-specific tool state
 .claude/settings.local.json

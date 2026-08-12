@@ -261,13 +261,19 @@ h1 {
 .section h2 { margin: 10px 0 14px; font-size: clamp(31px, 3.3vw, 46px); line-height: 1.08; letter-spacing: -.04em; }
 .section-copy, .details-copy p { color: #94a2ae; line-height: 1.65; font-size: 16px; max-width: 580px; }
 .install-panel { margin-top: 28px; border: 1px solid #2e4b61; border-radius: 12px; overflow: hidden; background: #07192a; }
-.install-tabs { display: grid; grid-template-columns: repeat(4, 1fr); border-bottom: 1px solid #2a455a; overflow-x: auto; }
+.install-tabs { display: grid; grid-template-columns: repeat(3, 1fr); border-bottom: 1px solid #2a455a; overflow-x: auto; }
 .install-tabs button { border: 0; background: transparent; color: #8e9aa5; padding: 14px 10px; white-space: nowrap; cursor: pointer; font-size: 13px; }
 .install-tabs button.is-active { color: #f0f2f3; background: rgba(96,126,146,.13); box-shadow: inset 0 2px var(--orange); }
 .command-wrap { position: relative; }
-.command-wrap pre, .terminal-card pre { margin: 0; padding: 22px; overflow: auto; font-family: var(--mono); font-size: 13px; color: #e8ecee; }
+.command-wrap pre, .terminal-card pre { margin: 0; padding: 22px; overflow-x: auto; font-family: var(--mono); font-size: 13px; color: #e8ecee; }
+.command-wrap pre { white-space: pre-wrap; word-break: break-all; }
 .copy-button { position: absolute; right: 10px; top: 10px; border: 1px solid #314c62; border-radius: 8px; color: #aeb8c1; background: #0b2237; padding: 7px 10px; cursor: pointer; font-size: 12px; }
 .copy-button:hover { color: #fff; }
+.download-links { display: flex; align-items: center; gap: 12px; padding: 10px 22px; border-top: 1px solid #2a455a; background: #07192a; }
+.download-links a { color: var(--orange); font-family: var(--mono); font-size: 13px; text-decoration: none; padding: 4px 12px; border: 1px solid #3a5568; border-radius: 6px; transition: border-color .15s; }
+.download-links a:hover { border-color: var(--orange); color: #fff; }
+.download-links .fine-print { margin-left: auto; }
+.download-links .fine-print a { border: 0; padding: 0; color: var(--blue); font-family: var(--sans); }
 .fine-print { font-size: 12px; color: #6f8291; line-height: 1.5; }
 .fine-print code { color: #aeb8c1; font-family: var(--mono); }
 .terminal-card { margin-top: 28px; border: 1px solid #2e4c62; border-radius: 12px; overflow: hidden; background: #041524; }
@@ -324,7 +330,9 @@ kbd { border: 1px solid #314d64; border-bottom-width: 2px; border-radius: 5px; b
   .feature + .feature { border-left: 0; border-top: 1px solid var(--line-soft); }
   .two-col { grid-template-columns: 1fr; }
   .section { padding: 70px 0; }
-  .install-tabs { grid-template-columns: repeat(4, minmax(112px, 1fr)); }
+  .install-tabs { grid-template-columns: repeat(3, minmax(112px, 1fr)); }
+  .download-links { flex-wrap: wrap; }
+  .download-links .fine-print { margin-left: 0; flex-basis: 100%; }
   .detail-grid { grid-template-columns: 1fr; }
   .detail-grid > div:nth-child(odd) { border-right: 0; }
   .detail-grid > div + div { border-top: 1px solid var(--line-soft); }
