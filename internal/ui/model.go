@@ -712,7 +712,7 @@ func (m *Model) handleSelectDone() (tea.Model, tea.Cmd) {
 		defaults := smb.DefaultMountOptions()
 		d := components.NewDialog("Mount Options: "+share.Path, []components.DialogField{
 			{Label: "Mount Point", Value: defaultMP},
-			{Label: "SMB Version", Value: defaults.Version, Placeholder: "3.0, 2.1, 1.0"},
+			{Label: "SMB Version", Value: defaults.Version, Placeholder: "auto, 3.0, 2.1, 1.0"},
 			{Label: "Security", Value: defaults.Security, Placeholder: "ntlmssp, krb5"},
 			{Label: "UID", Value: defaults.UID},
 			{Label: "GID", Value: defaults.GID},

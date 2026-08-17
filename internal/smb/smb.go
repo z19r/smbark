@@ -60,15 +60,81 @@ type MountOptions struct {
 	Creds      Credentials
 }
 
+// AutoVersion is the sentinel MountOptions.Version value meaning "probe the
+// server for the best dialect it supports" rather than pinning one.
+const AutoVersion = "auto"
+
+// autoDialects lists the SMB dialects to probe, most secure first, down to the
+// lowest we select automatically. SMB1 ("1.0") is deliberately excluded: it is
+// unencrypted and deprecated, so it is only used when set explicitly. Modern
+// kernels refuse anything below 2.1 unless it is named, which is why 2.0 must
+// be listed here for older NAS boxes that top out at SMB 2.0.
+var autoDialects = []string{"3.1.1", "3.0", "2.1", "2.0"}
+
+// versionsToTry expands a configured version into the ordered list of dialects
+// to attempt. An explicit version is honored as-is; "" or AutoVersion expands
+// to the probe list.
+func versionsToTry(version string) []string {
+	if version == "" || version == AutoVersion {
+		return autoDialects
+	}
+	return []string{version}
+}
+
+// isDialectError reports whether a mount failure looks like a protocol/dialect
+// negotiation rejection (EINVAL / "error(22)") that is worth retrying at a
+// lower dialect, versus a credential or connectivity failure we surface as-is.
+func isDialectError(output string) bool {
+	return strings.Contains(output, "error(22)") ||
+		strings.Contains(output, "Invalid argument")
+}
+
 func DefaultMountOptions() MountOptions {
 	return MountOptions{
-		Version:  "3.0",
+		Version:  AutoVersion,
 		Security: "ntlmssp",
 		UID:      fmt.Sprintf("%d", os.Getuid()),
 		GID:      fmt.Sprintf("%d", os.Getgid()),
 		FileMode: "0755",
 		DirMode:  "0755",
 	}
+}
+
+// attemptCifsMount runs a single `mount -t cifs` with the given comma-joined
+// -o option string, returning the trimmed combined output. password, if
+// non-empty, is passed via the PASSWD env var (the inline-credentials path).
+func attemptCifsMount(sharePath, mountPoint, optString, password string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "sudo", "-n", "mount", "-t", "cifs", sharePath, mountPoint, "-o", optString)
+	if password != "" {
+		cmd.Env = append(os.Environ(), "PASSWD="+password)
+	}
+	out, err := cmd.CombinedOutput()
+	return strings.TrimSpace(string(out)), err
+}
+
+// mountWithNegotiation tries each candidate dialect in order, leaving the share
+// mounted on the first success and returning the version that worked. It only
+// advances to a lower dialect on a negotiation-style rejection; a credential or
+// connectivity error is returned immediately so it is not masked.
+func mountWithNegotiation(sharePath, mountPoint string, baseOpts, versions []string, password string) (string, error) {
+	var lastErr error
+	for _, v := range versions {
+		optString := strings.Join(append([]string{"vers=" + v}, baseOpts...), ",")
+		out, err := attemptCifsMount(sharePath, mountPoint, optString, password)
+		if err == nil {
+			return v, nil
+		}
+		if strings.Contains(out, "password is required") {
+			return "", fmt.Errorf("sudo requires a password — run 'sudo -v' in another terminal first")
+		}
+		lastErr = fmt.Errorf("mount failed (vers=%s): %s", v, out)
+		if !isDialectError(out) {
+			return "", lastErr
+		}
+	}
+	return "", lastErr
 }
 
 func DiscoverHosts(ctx context.Context) ([]Host, error) {
@@ -404,55 +470,38 @@ func MountShare(share Share, opts MountOptions) error {
 
 	isGuest := opts.Creds.Username == ""
 
-	var mountOpts []string
-	if opts.Version != "" {
-		mountOpts = append(mountOpts, "vers="+opts.Version)
-	}
+	// baseOpts holds every option except vers=, which mountWithNegotiation
+	// prepends per candidate dialect.
+	var baseOpts []string
 	if isGuest {
-		mountOpts = append(mountOpts, "guest", "sec=none")
+		baseOpts = append(baseOpts, "guest", "sec=none")
 	} else {
 		if opts.Security != "" {
-			mountOpts = append(mountOpts, "sec="+opts.Security)
+			baseOpts = append(baseOpts, "sec="+opts.Security)
 		}
-		mountOpts = append(mountOpts, "username="+opts.Creds.Username)
+		baseOpts = append(baseOpts, "username="+opts.Creds.Username)
 		if opts.Creds.Domain != "" {
-			mountOpts = append(mountOpts, "domain="+opts.Creds.Domain)
+			baseOpts = append(baseOpts, "domain="+opts.Creds.Domain)
 		}
 	}
 	if opts.UID != "" {
-		mountOpts = append(mountOpts, "uid="+opts.UID)
+		baseOpts = append(baseOpts, "uid="+opts.UID)
 	}
 	if opts.GID != "" {
-		mountOpts = append(mountOpts, "gid="+opts.GID)
+		baseOpts = append(baseOpts, "gid="+opts.GID)
 	}
 	if opts.FileMode != "" {
-		mountOpts = append(mountOpts, "file_mode="+opts.FileMode)
+		baseOpts = append(baseOpts, "file_mode="+opts.FileMode)
 	}
 	if opts.DirMode != "" {
-		mountOpts = append(mountOpts, "dir_mode="+opts.DirMode)
+		baseOpts = append(baseOpts, "dir_mode="+opts.DirMode)
 	}
 	if opts.ReadOnly {
-		mountOpts = append(mountOpts, "ro")
+		baseOpts = append(baseOpts, "ro")
 	}
 
-	args := []string{"-t", "cifs", share.Path, mountPoint}
-	if len(mountOpts) > 0 {
-		args = append(args, "-o", strings.Join(mountOpts, ","))
-	}
-
-	cmd := exec.Command("sudo", append([]string{"-n", "mount"}, args...)...)
-	if opts.Creds.Password != "" {
-		cmd.Env = append(os.Environ(), "PASSWD="+opts.Creds.Password)
-	}
-
-	if out, err := cmd.CombinedOutput(); err != nil {
-		outStr := strings.TrimSpace(string(out))
-		if strings.Contains(outStr, "password is required") || strings.Contains(outStr, "a password is required") {
-			return fmt.Errorf("sudo requires a password — run 'sudo -v' in another terminal first")
-		}
-		return fmt.Errorf("mount failed: %s", outStr)
-	}
-	return nil
+	_, err := mountWithNegotiation(share.Path, mountPoint, baseOpts, versionsToTry(opts.Version), opts.Creds.Password)
+	return err
 }
 
 func UnmountShare(mountPoint string) error {
@@ -509,23 +558,34 @@ func CreateAutomount(cfg AutomountConfig) error {
 
 	isGuest := credFile == ""
 
-	var mountOpts []string
-	if cfg.Options.Version != "" {
-		mountOpts = append(mountOpts, "vers="+cfg.Options.Version)
-	}
+	// baseOpts excludes vers=; the concrete dialect is resolved by probing so
+	// the persisted unit pins a version the server actually supports (a unit
+	// hard-coded to vers=3.0 silently fails at boot on older SMB2.0 servers).
+	var baseOpts []string
 	if isGuest {
-		mountOpts = append(mountOpts, "guest", "sec=none")
+		baseOpts = append(baseOpts, "guest", "sec=none")
 	} else {
 		if cfg.Options.Security != "" {
-			mountOpts = append(mountOpts, "sec="+cfg.Options.Security)
+			baseOpts = append(baseOpts, "sec="+cfg.Options.Security)
 		}
-		mountOpts = append(mountOpts, "credentials="+credFile)
+		baseOpts = append(baseOpts, "credentials="+credFile)
 	}
-	mountOpts = append(mountOpts, fmt.Sprintf("uid=%s", cfg.Options.UID))
-	mountOpts = append(mountOpts, fmt.Sprintf("gid=%s", cfg.Options.GID))
-	mountOpts = append(mountOpts, fmt.Sprintf("file_mode=%s", cfg.Options.FileMode))
-	mountOpts = append(mountOpts, fmt.Sprintf("dir_mode=%s", cfg.Options.DirMode))
-	mountOpts = append(mountOpts, "_netdev")
+	baseOpts = append(baseOpts, fmt.Sprintf("uid=%s", cfg.Options.UID))
+	baseOpts = append(baseOpts, fmt.Sprintf("gid=%s", cfg.Options.GID))
+	baseOpts = append(baseOpts, fmt.Sprintf("file_mode=%s", cfg.Options.FileMode))
+	baseOpts = append(baseOpts, fmt.Sprintf("dir_mode=%s", cfg.Options.DirMode))
+	baseOpts = append(baseOpts, "_netdev")
+
+	// Probe for a dialect that actually mounts, then release it — the automount
+	// will remount on demand. The version that worked is baked into the unit.
+	// Credentials come from the cred file (or it is a guest mount), so no
+	// PASSWD env is needed for the probe.
+	version, err := mountWithNegotiation(cfg.Share.Path, mountPoint, baseOpts, versionsToTry(cfg.Options.Version), "")
+	if err != nil {
+		return fmt.Errorf("could not negotiate an SMB dialect for %s: %w", cfg.Share.Path, err)
+	}
+	sudoRun("umount", "-l", mountPoint)
+	mountOpts := append([]string{"vers=" + version}, baseOpts...)
 
 	mountUnit := fmt.Sprintf(`[Unit]
 Description=SMB mount for %s
@@ -781,23 +841,46 @@ func AddFstabEntry(share Share, opts MountOptions) error {
 		mountPoint = filepath.Join("/mnt/smb", share.Host, share.Name)
 	}
 
-	var mountOpts []string
+	if err := sudoRun("mkdir", "-p", mountPoint); err != nil {
+		return fmt.Errorf("failed to create mount point %s: %w", mountPoint, err)
+	}
+
+	// baseOpts excludes vers=; the concrete dialect is resolved by probing so
+	// the fstab entry pins a version the server supports (fstab cannot carry
+	// the "auto" sentinel — it must be a literal mount option).
+	var baseOpts []string
 	if opts.Creds.Username != "" {
 		credFile := fmt.Sprintf("/etc/samba/credentials/%s-%s", share.Host, share.Name)
-		mountOpts = append(mountOpts, "credentials="+credFile)
+		if err := sudoRun("mkdir", "-p", "/etc/samba/credentials"); err != nil {
+			return fmt.Errorf("failed to create credentials dir: %w", err)
+		}
+		credContent := fmt.Sprintf("username=%s\npassword=%s\n", opts.Creds.Username, opts.Creds.Password)
+		if opts.Creds.Domain != "" {
+			credContent += fmt.Sprintf("domain=%s\n", opts.Creds.Domain)
+		}
+		if err := sudoWrite(credFile, credContent); err != nil {
+			return fmt.Errorf("failed to write credentials: %w", err)
+		}
+		sudoRun("chmod", "600", credFile)
+		baseOpts = append(baseOpts, "credentials="+credFile)
 	} else {
-		mountOpts = append(mountOpts, "guest")
+		baseOpts = append(baseOpts, "guest")
 	}
-	if opts.Version != "" {
-		mountOpts = append(mountOpts, "vers="+opts.Version)
-	}
-	mountOpts = append(mountOpts, "_netdev", "nofail")
 	if opts.UID != "" {
-		mountOpts = append(mountOpts, "uid="+opts.UID)
+		baseOpts = append(baseOpts, "uid="+opts.UID)
 	}
 	if opts.GID != "" {
-		mountOpts = append(mountOpts, "gid="+opts.GID)
+		baseOpts = append(baseOpts, "gid="+opts.GID)
 	}
+
+	version, err := mountWithNegotiation(share.Path, mountPoint, baseOpts, versionsToTry(opts.Version), "")
+	if err != nil {
+		return fmt.Errorf("could not negotiate an SMB dialect for %s: %w", share.Path, err)
+	}
+	sudoRun("umount", "-l", mountPoint)
+
+	mountOpts := append([]string{"vers=" + version}, baseOpts...)
+	mountOpts = append(mountOpts, "_netdev", "nofail")
 
 	entry := fmt.Sprintf("%s\t%s\tcifs\t%s\t0\t0\n",
 		share.Path, mountPoint, strings.Join(mountOpts, ","))
