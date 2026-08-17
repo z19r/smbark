@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-08-17
+
+### Fixed
+
+- negotiate SMB dialect instead of hard-coding vers=3.0 (#3)
+
 ## [1.0.0] - 2026-08-12
 
 ### Added
