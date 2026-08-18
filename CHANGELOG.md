@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-08-18
+
+### Added
+
+- add version command and show version in help menu (#6)
+
 ## [1.1.0] - 2026-08-18
 
 ## [1.0.1] - 2026-08-17
