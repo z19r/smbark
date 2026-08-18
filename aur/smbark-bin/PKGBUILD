@@ -1,0 +1,22 @@
+# Maintainer: Zack Kitzmiller <zackkitzmiller@gmail.com>
+pkgname=smbark-bin
+pkgver=0.0.0
+pkgrel=1
+pkgdesc="A terminal UI for discovering, mounting, and managing SMB shares on Linux (prebuilt binary)"
+arch=('x86_64' 'aarch64')
+url="https://github.com/z19r/smbark"
+license=('MIT')
+depends=('smbclient' 'cifs-utils')
+provides=('smbark')
+conflicts=('smbark')
+source=("LICENSE-$pkgver::$url/raw/v$pkgver/LICENSE")
+source_x86_64=("smbark-$pkgver-x86_64::$url/releases/download/v$pkgver/smbark-linux-amd64")
+source_aarch64=("smbark-$pkgver-aarch64::$url/releases/download/v$pkgver/smbark-linux-arm64")
+sha256sums=('SKIP')
+sha256sums_x86_64=('SKIP')
+sha256sums_aarch64=('SKIP')
+
+package() {
+    install -Dm755 "smbark-$pkgver-$CARCH" "$pkgdir/usr/bin/smbark"
+    install -Dm644 "LICENSE-$pkgver" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

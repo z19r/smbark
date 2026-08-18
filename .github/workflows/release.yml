@@ -22,3 +22,27 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-aur:
+    needs: release
+    if: vars.PUBLISH_TO_AUR == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        pkgname: [smbark-bin, smbark]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set pkgver from VERSION
+        run: |
+          PKGVER=$(cat VERSION)
+          sed -i "s/^pkgver=.*/pkgver=${PKGVER}/" "aur/${{ matrix.pkgname }}/PKGBUILD"
+      - name: Publish to AUR
+        uses: KSXGitHub/github-actions-deploy-aur@v2.7.2
+        with:
+          pkgname: ${{ matrix.pkgname }}
+          pkgbuild: aur/${{ matrix.pkgname }}/PKGBUILD
+          commit_username: Zack Kitzmiller
+          commit_email: zackkitzmiller@gmail.com
+          ssh_private_key: ${{ secrets.AUR_SSH_KEY }}
+          commit_message: "Update to ${{ github.ref_name }}"
+          updpkgsums: true
