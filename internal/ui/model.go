@@ -18,6 +18,9 @@ import (
 	"github.com/z19r/smbark/internal/ui/components"
 )
 
+// Version is the smbark release version, set from main at startup.
+var Version = "dev"
+
 const (
 	TabDiscover  = 0
 	TabMounted   = 1
@@ -1241,7 +1244,7 @@ func renderHelpContent(t *theme.Theme) string {
 
 	lines = append(lines, h.Render("  About"))
 	lines = append(lines, "")
-	lines = append(lines, d.Render("  SMBark — A beautiful TUI for managing SMB shares"))
+	lines = append(lines, d.Render("  SMBark v"+Version+" — A beautiful TUI for managing SMB shares"))
 	lines = append(lines, d.Render("  Built with Charm libraries (Bubble Tea, Lip Gloss, Bubbles)"))
 	lines = append(lines, d.Render("  Omarchy theme support included"))
 
