@@ -65,6 +65,13 @@ curl -fsSL https://smbark.z19r.com/install.sh | sh
 
 Detects your architecture (x86_64 / ARM64) and installs to `/usr/local/bin`.
 
+**Arch Linux (AUR):**
+
+```bash
+yay -S smbark-bin   # prebuilt binary
+yay -S smbark       # build from source
+```
+
 **With Go:**
 
 ```bash
@@ -213,10 +220,24 @@ The full flow:
 7. Tags `vX.Y.Z` on `main` and pushes the tag
 8. Cross-compiles binaries for `linux/amd64` and `linux/arm64`
 9. Creates a GitHub release with the binaries attached
+10. Publishes the `smbark-bin` and `smbark` packages to the [AUR](https://aur.archlinux.org/) (only when the `PUBLISH_TO_AUR` repository variable is `true`)
 
 Requires [`gh`](https://cli.github.com/) to be installed and authenticated.
 
 Pre-built binaries are available on the [releases page](https://github.com/z19r/smbark/releases).
+
+### AUR setup
+
+The `publish-aur` job in `.github/workflows/release.yml` pushes updated PKGBUILDs
+(templated from `aur/`) on each tag. It requires a one-time setup:
+
+1. Create an [AUR account](https://aur.archlinux.org/) and register your SSH **public** key on it.
+2. Add the matching **private** key as a repository secret named `AUR_SSH_KEY`.
+3. Set the repository variable `PUBLISH_TO_AUR` to `true` (Settings → Secrets and variables →
+   Actions → Variables). The job is skipped unless this is set, so AUR publishing is opt-in.
+
+The first tagged release creates the `smbark-bin` and `smbark` AUR packages; subsequent
+releases update them. Package sums are recomputed automatically at publish time.
 
 ## Project layout
 

@@ -272,7 +272,7 @@ release LEVEL: release-check
     git tag -a "v${VERSION}" -m "v${VERSION}"
     git push origin "v${VERSION}"
     echo ""
-    echo "Release v${VERSION} tagged. GitHub Actions will build binaries and create the release."
+    echo "Release v${VERSION} tagged. GitHub Actions will build binaries, create the release, and (if PUBLISH_TO_AUR is enabled) publish to the AUR."
     echo "  https://github.com/z19r/smbark/actions"
 
 # ─── Cleanup ─────────────────────────────────────────────────────

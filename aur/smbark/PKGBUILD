@@ -1,0 +1,27 @@
+# Maintainer: Zack Kitzmiller <zackkitzmiller@gmail.com>
+pkgname=smbark
+pkgver=0.0.0
+pkgrel=1
+pkgdesc="A terminal UI for discovering, mounting, and managing SMB shares on Linux"
+arch=('x86_64' 'aarch64')
+url="https://github.com/z19r/smbark"
+license=('MIT')
+depends=('smbclient' 'cifs-utils')
+makedepends=('go')
+provides=('smbark')
+conflicts=('smbark-bin')
+source=("smbark-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+build() {
+    cd "smbark-$pkgver"
+    export CGO_ENABLED=0
+    export GOFLAGS="-trimpath -mod=readonly -modcacherw"
+    go build -ldflags="-s -w" -o smbark .
+}
+
+package() {
+    cd "smbark-$pkgver"
+    install -Dm755 smbark "$pkgdir/usr/bin/smbark"
+    install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}
