@@ -186,6 +186,7 @@ release LEVEL: release-check
     esac
     VERSION="${MAJOR}.${MINOR}.${PATCH}"
     echo "$VERSION" > VERSION
+    sed -i -E "s/is \*\*v[0-9]+\.[0-9]+\.[0-9]+\*\*/is **v${VERSION}**/" SECURITY.md
     go build ./...
     TODAY=$(date -u +%Y-%m-%d)
     PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
@@ -243,7 +244,7 @@ release LEVEL: release-check
     mv CHANGELOG.md.tmp CHANGELOG.md
     rm -f /tmp/smbark_cl_section
     git checkout -b "release/v${VERSION}"
-    git add VERSION CHANGELOG.md
+    git add VERSION CHANGELOG.md SECURITY.md
     git commit -m "release: v${VERSION}"
     git push -u origin "release/v${VERSION}"
     gh pr create \
