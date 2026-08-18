@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  attest:
     runs-on: ubuntu-latest
     permissions:
       id-token: write
