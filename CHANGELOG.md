@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-08-19
+
+### Added
+
+- publish smbark to the AUR on release (#10)
+- add attestations (#8)
+
+### Changed
+
+- add sysExec seam and comprehensive test suite (#11)
+- add security policy (#9)
+
 ## [1.2.0] - 2026-08-18
 
 ### Added
