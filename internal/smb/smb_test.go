@@ -207,11 +207,11 @@ func TestSystemdUnitName(t *testing.T) {
 
 func TestFormatSize(t *testing.T) {
 	cases := map[uint64]string{
-		0:                    "0 B",
-		512:                  "512 B",
-		1024:                 "1.0 KB",
-		1024 * 1024:          "1.0 MB",
-		1024 * 1024 * 1024:   "1.0 GB",
+		0:                         "0 B",
+		512:                       "512 B",
+		1024:                      "1.0 KB",
+		1024 * 1024:               "1.0 MB",
+		1024 * 1024 * 1024:        "1.0 GB",
 		1024 * 1024 * 1024 * 1024: "1.0 TB",
 	}
 	for in, want := range cases {
