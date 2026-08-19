@@ -100,18 +100,34 @@ func DefaultMountOptions() MountOptions {
 	}
 }
 
+// sysExec is the single seam through which every external command runs. Tests
+// replace it to simulate command output/exit codes and to record the exact
+// command sequence the mount/automount orchestration issues. env and stdin are
+// optional; the returned string is the command's combined stdout+stderr.
+var sysExec = func(ctx context.Context, env []string, stdin, name string, args ...string) (string, error) {
+	cmd := exec.CommandContext(ctx, name, args...)
+	if len(env) > 0 {
+		cmd.Env = append(os.Environ(), env...)
+	}
+	if stdin != "" {
+		cmd.Stdin = strings.NewReader(stdin)
+	}
+	out, err := cmd.CombinedOutput()
+	return string(out), err
+}
+
 // attemptCifsMount runs a single `mount -t cifs` with the given comma-joined
 // -o option string, returning the trimmed combined output. password, if
 // non-empty, is passed via the PASSWD env var (the inline-credentials path).
 func attemptCifsMount(sharePath, mountPoint, optString, password string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "sudo", "-n", "mount", "-t", "cifs", sharePath, mountPoint, "-o", optString)
+	var env []string
 	if password != "" {
-		cmd.Env = append(os.Environ(), "PASSWD="+password)
+		env = []string{"PASSWD=" + password}
 	}
-	out, err := cmd.CombinedOutput()
-	return strings.TrimSpace(string(out)), err
+	out, err := sysExec(ctx, env, "", "sudo", "-n", "mount", "-t", "cifs", sharePath, mountPoint, "-o", optString)
+	return strings.TrimSpace(out), err
 }
 
 // mountWithNegotiation tries each candidate dialect in order, leaving the share
@@ -251,22 +267,37 @@ func discoverSubnetScan(ctx context.Context) ([]Host, error) {
 	return hosts, nil
 }
 
+// splitUNCPath splits a CIFS UNC path ("//host/share") into its host and share
+// name components. Either may be empty if the path is malformed.
+func splitUNCPath(path string) (host, name string) {
+	parts := strings.SplitN(strings.TrimPrefix(path, "//"), "/", 2)
+	if len(parts) >= 1 {
+		host = parts[0]
+	}
+	if len(parts) >= 2 {
+		name = parts[1]
+	}
+	return host, name
+}
+
 func discoverAvahi(ctx context.Context) ([]Host, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "avahi-browse", "-t", "-r", "-p", "_smb._tcp")
-	out, err := cmd.Output()
+	out, err := sysExec(ctx, nil, "", "avahi-browse", "-t", "-r", "-p", "_smb._tcp")
 	if err != nil {
 		return nil, err
 	}
+	return parseAvahi(out), nil
+}
 
+// parseAvahi extracts hosts from `avahi-browse -p` machine-readable output.
+func parseAvahi(output string) []Host {
 	var hosts []Host
 	seen := make(map[string]bool)
-	scanner := bufio.NewScanner(strings.NewReader(string(out)))
+	scanner := bufio.NewScanner(strings.NewReader(output))
 	for scanner.Scan() {
-		line := scanner.Text()
-		fields := strings.Split(line, ";")
+		fields := strings.Split(scanner.Text(), ";")
 		if len(fields) < 8 || fields[0] != "=" {
 			continue
 		}
@@ -277,25 +308,25 @@ func discoverAvahi(ctx context.Context) ([]Host, error) {
 			hosts = append(hosts, Host{Name: name, IP: ip})
 		}
 	}
-	return hosts, nil
+	return hosts
 }
 
 func discoverNMB(ctx context.Context) ([]Host, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "nmblookup", "-S", "__SAMBA__")
-	out, _ := cmd.Output()
+	out, _ := sysExec(ctx, nil, "", "nmblookup", "-S", "__SAMBA__")
+	out2, _ := sysExec(ctx, nil, "", "nmblookup", "-S", "*")
+	return parseNMB(out + "\n" + out2), nil
+}
 
-	cmd2 := exec.CommandContext(ctx, "nmblookup", "-S", "*")
-	out2, _ := cmd2.Output()
+var nmbLineRe = regexp.MustCompile(`(\d+\.\d+\.\d+\.\d+)\s+(\S+)`)
 
-	combined := string(out) + "\n" + string(out2)
-
+// parseNMB extracts hosts from combined `nmblookup -S` output.
+func parseNMB(combined string) []Host {
 	var hosts []Host
 	seen := make(map[string]bool)
-	re := regexp.MustCompile(`(\d+\.\d+\.\d+\.\d+)\s+(\S+)`)
-	for _, match := range re.FindAllStringSubmatch(combined, -1) {
+	for _, match := range nmbLineRe.FindAllStringSubmatch(combined, -1) {
 		ip := match[1]
 		name := match[2]
 		if !seen[ip] {
@@ -303,7 +334,7 @@ func discoverNMB(ctx context.Context) ([]Host, error) {
 			hosts = append(hosts, Host{Name: name, IP: ip})
 		}
 	}
-	return hosts, nil
+	return hosts
 }
 
 func ListShares(ctx context.Context, host string, creds Credentials) ([]Share, error) {
@@ -318,16 +349,16 @@ func ListShares(ctx context.Context, host string, creds Credentials) ([]Share, e
 		}
 	}
 
-	cmd := exec.CommandContext(ctx, "smbclient", args...)
+	stdin := ""
 	if creds.Password != "" {
-		cmd.Stdin = strings.NewReader(creds.Password + "\n")
+		stdin = creds.Password + "\n"
 	}
-	out, err := cmd.CombinedOutput()
+	out, err := sysExec(ctx, nil, stdin, "smbclient", args...)
 	if err != nil && len(out) == 0 {
 		return nil, fmt.Errorf("smbclient failed: %w", err)
 	}
 
-	return parseSmbclientList(host, string(out)), nil
+	return parseSmbclientList(host, out), nil
 }
 
 func parseSmbclientList(host, output string) []Share {
@@ -396,11 +427,19 @@ func GetMountedShares() ([]Share, error) {
 		return nil, err
 	}
 
+	shares := parseCifsMounts(string(data))
+	for i := range shares {
+		fillDiskUsage(&shares[i])
+	}
+	return shares, nil
+}
+
+// parseCifsMounts extracts cifs/smb3 mounts from /proc/mounts-style content.
+func parseCifsMounts(data string) []Share {
 	var shares []Share
-	scanner := bufio.NewScanner(strings.NewReader(string(data)))
+	scanner := bufio.NewScanner(strings.NewReader(data))
 	for scanner.Scan() {
-		line := scanner.Text()
-		fields := strings.Fields(line)
+		fields := strings.Fields(scanner.Text())
 		if len(fields) < 3 {
 			continue
 		}
@@ -409,51 +448,72 @@ func GetMountedShares() ([]Share, error) {
 		}
 
 		path := fields[0]
-		mountPoint := fields[1]
-
-		pathParts := strings.SplitN(strings.TrimPrefix(path, "//"), "/", 2)
-		host := ""
-		name := ""
-		if len(pathParts) >= 1 {
-			host = pathParts[0]
-		}
-		if len(pathParts) >= 2 {
-			name = pathParts[1]
-		}
-
-		share := Share{
+		host, name := splitUNCPath(path)
+		shares = append(shares, Share{
 			Host:       host,
 			Name:       name,
 			Type:       ShareTypeDisk,
 			Path:       path,
-			MountPoint: mountPoint,
+			MountPoint: fields[1],
 			IsMounted:  true,
-		}
-		fillDiskUsage(&share)
-		shares = append(shares, share)
+		})
 	}
-	return shares, nil
+	return shares
 }
 
 func fillDiskUsage(s *Share) {
 	if s.MountPoint == "" {
 		return
 	}
-	cmd := exec.Command("df", "--output=size,used,avail", "-B1", s.MountPoint)
-	out, err := cmd.Output()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	out, err := sysExec(ctx, nil, "", "df", "--output=size,used,avail", "-B1", s.MountPoint)
 	if err != nil {
 		return
 	}
-	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	total, used, free, ok := parseDiskUsage(out)
+	if ok {
+		s.SizeTotal, s.SizeUsed, s.SizeFree = total, used, free
+	}
+}
+
+// parseDiskUsage parses `df --output=size,used,avail -B1` output (a header line
+// followed by one data line of three byte counts).
+func parseDiskUsage(output string) (total, used, free uint64, ok bool) {
+	lines := strings.Split(strings.TrimSpace(output), "\n")
 	if len(lines) < 2 {
-		return
+		return 0, 0, 0, false
 	}
 	fields := strings.Fields(lines[1])
-	if len(fields) >= 3 {
-		fmt.Sscanf(fields[0], "%d", &s.SizeTotal)
-		fmt.Sscanf(fields[1], "%d", &s.SizeUsed)
-		fmt.Sscanf(fields[2], "%d", &s.SizeFree)
+	if len(fields) < 3 {
+		return 0, 0, 0, false
 	}
+	fmt.Sscanf(fields[0], "%d", &total)
+	fmt.Sscanf(fields[1], "%d", &used)
+	fmt.Sscanf(fields[2], "%d", &free)
+	return total, used, free, true
+}
+
+// unitNameForPath returns the systemd unit basename for a mount point, using
+// systemd-escape when available and falling back to a manual escape.
+func unitNameForPath(mountPoint string) string {
+	if unit, err := systemdEscapePath(mountPoint); err == nil {
+		return unit
+	}
+	return systemdUnitName(mountPoint)
+}
+
+// clearAutomountAt tears down any systemd automount/mount currently occupying
+// mountPoint so a fresh `mount -t cifs` can bind the path directly. An active
+// .automount turns the directory into an autofs point; mount.cifs canonicalises
+// its target, which triggers the autofs and fails the mount with ENODEV
+// ("No such device") before any dialect is even attempted — which in turn
+// aborts dialect negotiation. Stopping the units removes the autofs trigger.
+func clearAutomountAt(mountPoint string) {
+	unitName := unitNameForPath(mountPoint)
+	sudoRun("systemctl", "stop", unitName+".automount")
+	sudoRun("systemctl", "stop", unitName+".mount")
+	sudoRun("umount", "-l", mountPoint)
 }
 
 func MountShare(share Share, opts MountOptions) error {
@@ -462,8 +522,10 @@ func MountShare(share Share, opts MountOptions) error {
 		mountPoint = filepath.Join("/mnt/smb", share.Host, share.Name)
 	}
 
-	// Clean up any stale/failed mount before attempting
-	sudoRun("umount", "-l", mountPoint)
+	// Tear down any automount (or stale mount) occupying the path first. Mounting
+	// onto an active .automount point fails with ENODEV before any dialect is
+	// tried, which also aborts dialect negotiation — see clearAutomountAt.
+	clearAutomountAt(mountPoint)
 	if err := sudoRun("mkdir", "-p", mountPoint); err != nil {
 		return fmt.Errorf("failed to create mount point: %w", err)
 	}
@@ -524,15 +586,11 @@ func CreateAutomount(cfg AutomountConfig) error {
 		mountPoint = filepath.Join("/mnt/smb", cfg.Share.Host, cfg.Share.Name)
 	}
 
-	unitName, err := systemdEscapePath(mountPoint)
-	if err != nil {
-		unitName = systemdUnitName(mountPoint)
-	}
+	unitName := unitNameForPath(mountPoint)
 
-	// Stop any existing broken automount/mount for this path
-	sudoRun("systemctl", "stop", unitName+".automount")
-	sudoRun("systemctl", "stop", unitName+".mount")
-	sudoRun("umount", "-l", mountPoint)
+	// Stop any existing broken automount/mount for this path so the probe mount
+	// below can bind the path directly instead of tripping the autofs point.
+	clearAutomountAt(mountPoint)
 
 	if err := sudoRun("mkdir", "-p", mountPoint); err != nil {
 		return fmt.Errorf("failed to create mount point %s: %w", mountPoint, err)
@@ -635,8 +693,10 @@ WantedBy=multi-user.target
 		return fmt.Errorf("start failed: %w", err)
 	}
 
-	// Trigger the mount immediately so it shows up in /proc/mounts
-	sudoRun("systemctl", "start", unitName+".mount")
+	// Trigger the mount immediately so it shows up in /proc/mounts. Starting the
+	// .mount unit directly while the .automount is active fails with ENODEV;
+	// reading the directory lets autofs perform the mount the normal way.
+	sudoRun("ls", mountPoint)
 
 	return nil
 }
@@ -644,9 +704,9 @@ WantedBy=multi-user.target
 func sudoRun(args ...string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "sudo", append([]string{"-n"}, args...)...)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		outStr := strings.TrimSpace(string(out))
+	out, err := sysExec(ctx, nil, "", "sudo", append([]string{"-n"}, args...)...)
+	if err != nil {
+		outStr := strings.TrimSpace(out)
 		if strings.Contains(outStr, "password is required") || strings.Contains(outStr, "a password is required") {
 			return fmt.Errorf("sudo requires a password — run 'sudo -v' in another terminal first")
 		}
@@ -658,13 +718,9 @@ func sudoRun(args ...string) error {
 func sudoWrite(path, content string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "sudo", "-n", "tee", path)
-	cmd.Stdin = strings.NewReader(content)
-	var stderr strings.Builder
-	cmd.Stdout = nil
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		errStr := strings.TrimSpace(stderr.String())
+	out, err := sysExec(ctx, nil, content, "sudo", "-n", "tee", path)
+	if err != nil {
+		errStr := strings.TrimSpace(out)
 		if strings.Contains(errStr, "password is required") || strings.Contains(errStr, "a password is required") {
 			return fmt.Errorf("sudo requires a password — run 'sudo -v' in another terminal first")
 		}
@@ -674,12 +730,13 @@ func sudoWrite(path, content string) error {
 }
 
 func systemdEscapePath(path string) (string, error) {
-	cmd := exec.Command("systemd-escape", "-p", path)
-	out, err := cmd.Output()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	out, err := sysExec(ctx, nil, "", "systemd-escape", "-p", path)
 	if err != nil {
 		return "", err
 	}
-	return strings.TrimSpace(string(out)), nil
+	return strings.TrimSpace(out), nil
 }
 
 func RemoveAutomount(mountPoint string) error {
@@ -706,14 +763,15 @@ func RemoveAutomount(mountPoint string) error {
 }
 
 func GetAutomounts() ([]AutomountConfig, error) {
-	cmd := exec.Command("systemctl", "list-units", "--type=automount", "--all", "--no-legend", "--no-pager")
-	out, err := cmd.Output()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	out, err := sysExec(ctx, nil, "", "systemctl", "list-units", "--type=automount", "--all", "--no-legend", "--no-pager")
 	if err != nil {
 		return nil, err
 	}
 
 	var configs []AutomountConfig
-	scanner := bufio.NewScanner(strings.NewReader(string(out)))
+	scanner := bufio.NewScanner(strings.NewReader(out))
 	for scanner.Scan() {
 		fields := strings.Fields(scanner.Text())
 		if len(fields) < 1 {
@@ -725,46 +783,47 @@ func GetAutomounts() ([]AutomountConfig, error) {
 		}
 
 		mountUnit := strings.TrimSuffix(unit, ".automount") + ".mount"
-		showCmd := exec.Command("systemctl", "show", mountUnit, "--property=What,Where,Options")
-		showOut, err := showCmd.Output()
+		showOut, err := sysExec(ctx, nil, "", "systemctl", "show", mountUnit, "--property=What,Where,Options")
 		if err != nil {
 			continue
 		}
 
-		props := make(map[string]string)
-		for _, line := range strings.Split(string(showOut), "\n") {
-			parts := strings.SplitN(line, "=", 2)
-			if len(parts) == 2 {
-				props[parts[0]] = parts[1]
-			}
-		}
-
-		what := props["What"]
-		if !strings.HasPrefix(what, "//") {
+		cfg, ok := parseAutomountShow(showOut)
+		if !ok {
 			continue
 		}
-
-		pathParts := strings.SplitN(strings.TrimPrefix(what, "//"), "/", 2)
-		host := ""
-		name := ""
-		if len(pathParts) >= 1 {
-			host = pathParts[0]
-		}
-		if len(pathParts) >= 2 {
-			name = pathParts[1]
-		}
-
-		configs = append(configs, AutomountConfig{
-			Share: Share{
-				Host:       host,
-				Name:       name,
-				Path:       what,
-				MountPoint: props["Where"],
-			},
-			MountPoint: props["Where"],
-		})
+		configs = append(configs, cfg)
 	}
 	return configs, nil
+}
+
+// parseAutomountShow turns `systemctl show <unit>.mount --property=What,Where,Options`
+// key=value output into an AutomountConfig. ok is false when the What property
+// is not a CIFS UNC path.
+func parseAutomountShow(showOutput string) (AutomountConfig, bool) {
+	props := make(map[string]string)
+	for _, line := range strings.Split(showOutput, "\n") {
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) == 2 {
+			props[parts[0]] = parts[1]
+		}
+	}
+
+	what := props["What"]
+	if !strings.HasPrefix(what, "//") {
+		return AutomountConfig{}, false
+	}
+
+	host, name := splitUNCPath(what)
+	return AutomountConfig{
+		Share: Share{
+			Host:       host,
+			Name:       name,
+			Path:       what,
+			MountPoint: props["Where"],
+		},
+		MountPoint: props["Where"],
+	}, true
 }
 
 func systemdUnitName(mountPoint string) string {
@@ -778,12 +837,10 @@ func CheckConnectivity(host string) (time.Duration, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "smbclient", "-L", host, "-N", "--no-pass", "-m", "SMB3")
-	err := cmd.Run()
+	_, err := sysExec(ctx, nil, "", "smbclient", "-L", host, "-N", "--no-pass", "-m", "SMB3")
 	elapsed := time.Since(start)
 	if err != nil {
-		cmd2 := exec.CommandContext(ctx, "ping", "-c", "1", "-W", "2", host)
-		if err2 := cmd2.Run(); err2 != nil {
+		if _, err2 := sysExec(ctx, nil, "", "ping", "-c", "1", "-W", "2", host); err2 != nil {
 			return elapsed, fmt.Errorf("host unreachable")
 		}
 		return elapsed, fmt.Errorf("SMB service unavailable")
@@ -796,9 +853,13 @@ func GetFstabEntries() ([]Share, error) {
 	if err != nil {
 		return nil, err
 	}
+	return parseFstab(string(data)), nil
+}
 
+// parseFstab extracts cifs/smb3 entries from /etc/fstab-style content.
+func parseFstab(data string) []Share {
 	var shares []Share
-	scanner := bufio.NewScanner(strings.NewReader(string(data)))
+	scanner := bufio.NewScanner(strings.NewReader(data))
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if strings.HasPrefix(line, "#") || line == "" {
@@ -813,26 +874,16 @@ func GetFstabEntries() ([]Share, error) {
 		}
 
 		path := fields[0]
-		mountPoint := fields[1]
-		pathParts := strings.SplitN(strings.TrimPrefix(path, "//"), "/", 2)
-		host := ""
-		name := ""
-		if len(pathParts) >= 1 {
-			host = pathParts[0]
-		}
-		if len(pathParts) >= 2 {
-			name = pathParts[1]
-		}
-
+		host, name := splitUNCPath(path)
 		shares = append(shares, Share{
 			Host:       host,
 			Name:       name,
 			Path:       path,
-			MountPoint: mountPoint,
+			MountPoint: fields[1],
 			Type:       ShareTypeDisk,
 		})
 	}
-	return shares, nil
+	return shares
 }
 
 func AddFstabEntry(share Share, opts MountOptions) error {
@@ -885,9 +936,10 @@ func AddFstabEntry(share Share, opts MountOptions) error {
 	entry := fmt.Sprintf("%s\t%s\tcifs\t%s\t0\t0\n",
 		share.Path, mountPoint, strings.Join(mountOpts, ","))
 
-	cmd := exec.Command("sudo", "bash", "-c", fmt.Sprintf("echo %q >> /etc/fstab", entry))
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("failed to add fstab entry: %s: %w", string(out), err)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if out, err := sysExec(ctx, nil, "", "sudo", "bash", "-c", fmt.Sprintf("echo %q >> /etc/fstab", entry)); err != nil {
+		return fmt.Errorf("failed to add fstab entry: %s: %w", out, err)
 	}
 	return nil
 }
