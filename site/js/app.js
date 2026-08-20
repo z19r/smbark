@@ -56,9 +56,11 @@
   const installCode = document.querySelector('[data-install-code]');
   const downloadLinks = document.querySelector('[data-download-links]');
   const installTabs = [...document.querySelectorAll('[data-install-tab]')];
+  let installMethod = 'source';
   installTabs.forEach((tab) => {
     tab.addEventListener('click', () => {
       const key = tab.dataset.installTab;
+      installMethod = key;
       installTabs.forEach((item) => {
         const active = item === tab;
         item.classList.toggle('is-active', active);
@@ -71,6 +73,7 @@
 
   document.querySelector('[data-copy-install]')?.addEventListener('click', async (event) => {
     const button = event.currentTarget;
+    window.umami?.track('Install: Copy command', { method: installMethod });
     try {
       await navigator.clipboard.writeText(installCode.textContent.trim());
       const old = button.textContent;
