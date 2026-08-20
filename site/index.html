@@ -9,22 +9,23 @@
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="css/styles.css" />
   <script src="js/app.js" defer></script>
+  <script defer src="https://cloud.umami.is/script.js" data-website-id="418b6118-f583-42ae-b44e-ab2cca6f1c99"></script>
 </head>
 <body>
   <div class="page-glow" aria-hidden="true"></div>
 
   <header class="site-header">
-    <a class="brand" href="#top" aria-label="SMBARK home">
+    <a class="brand" href="#top" aria-label="SMBARK home" data-umami-event="Nav: Home logo">
       <img src="assets/smbark-wordmark.png" alt="SMBARK" />
     </a>
     <nav class="site-nav" aria-label="Primary navigation">
-      <a href="#features">Features</a>
-      <a href="#install">Install</a>
-      <a href="#usage">Usage</a>
-      <a href="#screenshots">Screenshots</a>
-      <a href="#github" data-repo-link>GitHub</a>
+      <a href="#features" data-umami-event="Nav: Features">Features</a>
+      <a href="#install" data-umami-event="Nav: Install">Install</a>
+      <a href="#usage" data-umami-event="Nav: Usage">Usage</a>
+      <a href="#screenshots" data-umami-event="Nav: Screenshots">Screenshots</a>
+      <a href="#github" data-repo-link data-umami-event="Nav: GitHub">GitHub</a>
     </nav>
-    <a class="header-github" href="#github" data-repo-link aria-label="Open SMBARK on GitHub">
+    <a class="header-github" href="#github" data-repo-link aria-label="Open SMBARK on GitHub" data-umami-event="GitHub: Header button">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .8A11.4 11.4 0 0 0 8.4 23c.57.1.78-.25.78-.55v-2.14c-3.18.7-3.85-1.35-3.85-1.35-.52-1.32-1.27-1.67-1.27-1.67-1.04-.71.08-.7.08-.7 1.15.08 1.75 1.18 1.75 1.18 1.02 1.75 2.68 1.24 3.33.95.1-.74.4-1.24.73-1.53-2.54-.29-5.21-1.27-5.21-5.66 0-1.25.45-2.27 1.18-3.07-.12-.29-.51-1.45.11-3.03 0 0 .96-.31 3.14 1.17A10.9 10.9 0 0 1 12 6.21c.97 0 1.94.13 2.85.38 2.18-1.48 3.14-1.17 3.14-1.17.62 1.58.23 2.74.11 3.03.74.8 1.18 1.82 1.18 3.07 0 4.4-2.68 5.36-5.23 5.65.41.36.78 1.06.78 2.14v3.17c0 .3.2.66.79.55A11.4 11.4 0 0 0 12 .8Z"/></svg>
       <span>GitHub</span>
     </a>
@@ -37,10 +38,10 @@
         <h1>Discover. Mount.<br />Manage <span class="gradient-text">SMB Shares.</span></h1>
         <p class="lede">SMBARK is a terminal user interface for finding SMB/CIFS hosts on your network, mounting shares, and keeping automounts sane. Fast, native, keyboard-first.</p>
         <div class="hero-actions">
-          <a class="button button-primary" href="#install">
+          <a class="button button-primary" href="#install" data-umami-event="Hero: Install SMBARK">
             <span aria-hidden="true">↓</span> Install SMBARK
           </a>
-          <a class="button button-secondary" href="#github" data-repo-link>
+          <a class="button button-secondary" href="#github" data-repo-link data-umami-event="Hero: View on GitHub">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .8A11.4 11.4 0 0 0 8.4 23c.57.1.78-.25.78-.55v-2.14c-3.18.7-3.85-1.35-3.85-1.35-.52-1.32-1.27-1.67-1.27-1.67-1.04-.71.08-.7.08-.7 1.15.08 1.75 1.18 1.75 1.18 1.02 1.75 2.68 1.24 3.33.95.1-.74.4-1.24.73-1.53-2.54-.29-5.21-1.27-5.21-5.66 0-1.25.45-2.27 1.18-3.07-.12-.29-.51-1.45.11-3.03 0 0 .96-.31 3.14 1.17A10.9 10.9 0 0 1 12 6.21c.97 0 1.94.13 2.85.38 2.18-1.48 3.14-1.17 3.14-1.17.62 1.58.23 2.74.11 3.03.74.8 1.18 1.82 1.18 3.07 0 4.4-2.68 5.36-5.23 5.65.41.36.78 1.06.78 2.14v3.17c0 .3.2.66.79.55A11.4 11.4 0 0 0 12 .8Z"/></svg>
             View on GitHub
           </a>
@@ -71,14 +72,14 @@
           <figure class="slide" data-slide>
             <img src="assets/screenshots/config.webp" alt="SMBARK Config view showing system overview, fstab entries, and connectivity status" loading="lazy" />
           </figure>
-          <button class="carousel-arrow prev" type="button" data-prev aria-label="Previous screenshot">‹</button>
-          <button class="carousel-arrow next" type="button" data-next aria-label="Next screenshot">›</button>
+          <button class="carousel-arrow prev" type="button" data-prev aria-label="Previous screenshot" data-umami-event="Carousel: Prev">‹</button>
+          <button class="carousel-arrow next" type="button" data-next aria-label="Next screenshot" data-umami-event="Carousel: Next">›</button>
         </div>
         <div class="carousel-tabs" role="tablist" aria-label="Screenshot view">
-          <button class="is-active" type="button" data-dot="0" role="tab" aria-selected="true">Discover</button>
-          <button type="button" data-dot="1" role="tab" aria-selected="false">Mounted</button>
-          <button type="button" data-dot="2" role="tab" aria-selected="false">Automount</button>
-          <button type="button" data-dot="3" role="tab" aria-selected="false">Config</button>
+          <button class="is-active" type="button" data-dot="0" role="tab" aria-selected="true" data-umami-event="Carousel: Discover">Discover</button>
+          <button type="button" data-dot="1" role="tab" aria-selected="false" data-umami-event="Carousel: Mounted">Mounted</button>
+          <button type="button" data-dot="2" role="tab" aria-selected="false" data-umami-event="Carousel: Automount">Automount</button>
+          <button type="button" data-dot="3" role="tab" aria-selected="false" data-umami-event="Carousel: Config">Config</button>
         </div>
       </div>
     </section>
@@ -110,9 +111,9 @@
 
         <div class="install-panel" data-tabs>
           <div class="install-tabs" role="tablist" aria-label="Install method">
-            <button class="is-active" type="button" role="tab" aria-selected="true" data-install-tab="source">From source</button>
-            <button type="button" role="tab" aria-selected="false" data-install-tab="binary">Binary</button>
-            <button type="button" role="tab" aria-selected="false" data-install-tab="omarchy">Omarchy</button>
+            <button class="is-active" type="button" role="tab" aria-selected="true" data-install-tab="source" data-umami-event="Install tab: From source">From source</button>
+            <button type="button" role="tab" aria-selected="false" data-install-tab="binary" data-umami-event="Install tab: Binary">Binary</button>
+            <button type="button" role="tab" aria-selected="false" data-install-tab="omarchy" data-umami-event="Install tab: Omarchy">Omarchy</button>
           </div>
           <div class="command-wrap" data-install-command>
             <pre><code data-install-code>go install github.com/z19r/smbark@latest</code></pre>
@@ -120,9 +121,9 @@
             <button class="copy-button" type="button" data-copy-install aria-label="Copy install command">Copy</button>
           </div>
           <div class="download-links" data-download-links style="display:none">
-            <a href="https://github.com/z19r/smbark/releases/latest/download/smbark-linux-amd64">x86_64</a>
-            <a href="https://github.com/z19r/smbark/releases/latest/download/smbark-linux-arm64">ARM64</a>
-            <span class="fine-print">or grab from <a href="https://github.com/z19r/smbark/releases">all releases</a></span>
+            <a href="https://github.com/z19r/smbark/releases/latest/download/smbark-linux-amd64" data-umami-event="Download: x86_64">x86_64</a>
+            <a href="https://github.com/z19r/smbark/releases/latest/download/smbark-linux-arm64" data-umami-event="Download: ARM64">ARM64</a>
+            <span class="fine-print">or grab from <a href="https://github.com/z19r/smbark/releases" data-umami-event="Download: All releases">all releases</a></span>
           </div>
         </div>
       </div>
@@ -169,7 +170,7 @@ smbark scan
   <footer class="site-footer shell">
     <img src="assets/smbark-wordmark.png" alt="" aria-hidden="true" />
     <p>SMB share management for people who already have a terminal open.</p>
-    <a href="#github" data-repo-link>GitHub ↗</a>
+    <a href="#github" data-repo-link data-umami-event="GitHub: Footer link">GitHub ↗</a>
   </footer>
 </body>
 </html>
