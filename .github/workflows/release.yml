@@ -37,7 +37,7 @@ jobs:
           PKGVER=$(cat VERSION)
           sed -i "s/^pkgver=.*/pkgver=${PKGVER}/" "aur/${{ matrix.pkgname }}/PKGBUILD"
       - name: Publish to AUR
-        uses: KSXGitHub/github-actions-deploy-aur@v2.7.2
+        uses: KSXGitHub/github-actions-deploy-aur@v4.2.0
         with:
           pkgname: ${{ matrix.pkgname }}
           pkgbuild: aur/${{ matrix.pkgname }}/PKGBUILD
