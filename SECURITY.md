@@ -16,6 +16,7 @@ Report vulnerabilities privately using GitHub's
 [private vulnerability reporting](https://github.com/z19r/smbark/security/advisories/new),
 or by email to **zack@z19r.com**.
 
+
 Please include:
 
 - A description of the vulnerability and its impact.
