@@ -1,3 +1,5 @@
+[![Monitored by Cooper&Wright](https://img.shields.io/badge/monitored%20by-Cooper%26Wright-8a6a3b?style=flat-square)](https://cooperwright.com)
+
 <div align="center">
   <img src="site/assets/smbark-wordmark.png" alt="SMBark" width="420">
   <p><strong>A terminal UI for discovering, mounting, and managing SMB shares on Linux.</strong></p>
