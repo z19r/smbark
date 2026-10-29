@@ -46,8 +46,8 @@ type UnmountResultMsg struct {
 }
 
 type AutomountCreateMsg struct {
-	Share smb.Share
-	Err   error
+	Config smb.AutomountConfig
+	Err    error
 }
 
 type AutomountRemoveMsg struct {

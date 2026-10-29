@@ -660,10 +660,14 @@ Options=%s
 WantedBy=multi-user.target
 `, cfg.Share.Path, cfg.Share.Path, mountPoint, strings.Join(mountOpts, ","))
 
+	// The .automount must NOT order itself after network-online.target: systemd
+	// implicitly orders automounts Before=local-fs.target, and the network
+	// stack starts after local-fs, so that edge forms a boot ordering cycle.
+	// systemd breaks it by dropping unrelated jobs (dbus.socket, avahi, ...).
+	// The network dependency belongs on the .mount unit, which only starts on
+	// first access.
 	automountUnit := fmt.Sprintf(`[Unit]
 Description=SMB automount for %s
-After=network-online.target
-Wants=network-online.target
 
 [Automount]
 Where=%s

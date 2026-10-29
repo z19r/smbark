@@ -172,7 +172,7 @@ func unmountShare(mountPoint string) tea.Cmd {
 func createAutomount(cfg smb.AutomountConfig) tea.Cmd {
 	return func() tea.Msg {
 		err := smb.CreateAutomount(cfg)
-		return AutomountCreateMsg{Share: cfg.Share, Err: err}
+		return AutomountCreateMsg{Config: cfg, Err: err}
 	}
 }
 
@@ -347,13 +347,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case AutomountCreateMsg:
 		if msg.Err != nil {
-			if m.handleSudoError(msg.Err, nil) {
+			if m.handleSudoError(msg.Err, createAutomount(msg.Config)) {
 				return m, m.promptSudo()
 			}
 			m.setStatus(fmt.Sprintf("Automount setup failed: %v", msg.Err), true)
 			return m, nil
 		}
-		m.setStatus(fmt.Sprintf("Automount configured for %s", msg.Share.Path), false)
+		m.setStatus(fmt.Sprintf("Automount configured for %s", msg.Config.Share.Path), false)
 		return m, tea.Batch(loadMountedShares, loadAutomounts)
 
 	case AutomountRemoveMsg:
