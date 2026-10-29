@@ -1,7 +1,18 @@
+# goreleaser configuration for smbark.
+# Docs: https://goreleaser.com
 version: 2
 
+project_name: smbark
+
+before:
+  hooks:
+    - go mod tidy
+
 builds:
-  - env:
+  - id: smbark
+    main: .
+    binary: smbark
+    env:
       - CGO_ENABLED=0
     goos:
       - linux
@@ -11,12 +22,34 @@ builds:
     ldflags:
       - -s -w
 
+# Raw binaries, not archives: site/install.sh, the site's download links
+# and aur/smbark-bin fetch releases/download/vX.Y.Z/smbark-linux-<arch>.
 archives:
-  - format: binary
+  - id: smbark
+    formats: [binary]
     name_template: "{{ .ProjectName }}-{{ .Os }}-{{ .Arch }}"
 
 checksum:
-  name_template: checksums.txt
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
 
 changelog:
-  use: github-native
+  use: github
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "^ci:"
+
+release:
+  github:
+    owner: z19r
+    name: smbark
+  draft: false
+  prerelease: auto
+  name_template: "v{{ .Version }}"

@@ -75,18 +75,33 @@ test-coverage-check THRESHOLD="80":
 
 # ─── Linting & Formatting ───────────────────────────────────────
 
-# Format all source files
+# Format all Go source (gofmt + golines at 80 cols)
 fmt:
     gofmt -w .
+    PATH="$(go env GOPATH)/bin:$PATH" golines \
+        --base-formatter=gofmt --max-len=80 \
+        --shorten-comments -w . \
+        || go run github.com/segmentio/golines@latest \
+            --base-formatter=gofmt --max-len=80 \
+            --shorten-comments -w .
 
-# Check formatting without modifying files
+# Verify formatting (fails on anything unformatted)
 fmt-check:
     #!/usr/bin/env bash
     set -euo pipefail
-    UNFORMATTED=$(gofmt -l .)
-    if [[ -n "$UNFORMATTED" ]]; then
-        echo "Unformatted files:"
-        echo "$UNFORMATTED"
+    bad="$(gofmt -l .)"
+    if [[ -n "$bad" ]]; then
+        echo "$bad"
+        exit 1
+    fi
+    export PATH="$(go env GOPATH)/bin:$PATH"
+    if ! command -v golines >/dev/null; then
+        go install github.com/segmentio/golines@latest
+    fi
+    bad="$(golines --base-formatter=gofmt --max-len=80 \
+        --shorten-comments -l .)"
+    if [[ -n "$bad" ]]; then
+        echo "$bad"
         exit 1
     fi
 
@@ -132,15 +147,9 @@ ci-local: lint-all test
 
 # ─── Release ─────────────────────────────────────────────────────
 
-# Release quality gate (fmt-check + vet + test)
-release-check:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    UNFORMATTED=$(gofmt -l .)
-    if [[ -n "$UNFORMATTED" ]]; then
-        echo "Unformatted files:"; echo "$UNFORMATTED"; exit 1
-    fi
-    go vet ./...
+# Release verification gate (same checks CI enforces)
+release-check: fmt-check vet
+    go build ./...
     go test ./...
 
 # Preview what a release would do without changing anything
@@ -150,14 +159,14 @@ release-dry-run LEVEL:
     if [[ ! "{{ LEVEL }}" =~ ^(patch|minor|major)$ ]]; then
         echo "Usage: just release-dry-run patch|minor|major"; exit 1
     fi
-    CURRENT=$(cat VERSION 2>/dev/null || echo "0.0.0")
+    CURRENT=$(tr -d '[:space:]' < VERSION)
     echo "Current version: $CURRENT"
     echo "Bump level: {{ LEVEL }}"
     just release-check
     echo ""
     echo "All checks passed. Run: just release {{ LEVEL }}"
 
-# Bump version, create release branch + PR (requires: gh)
+# Bump version, open a release PR, merge on green CI (requires: gh)
 release LEVEL: release-check
     #!/usr/bin/env bash
     set -euo pipefail
@@ -177,17 +186,22 @@ release LEVEL: release-check
         fi
     fi
     git pull --ff-only origin main
-    OLD_VERSION=$(cat VERSION 2>/dev/null || echo "0.0.0")
-    IFS='.' read -r MAJOR MINOR PATCH <<< "$OLD_VERSION"
+    git fetch --tags origin
+    OLD=$(tr -d '[:space:]' < VERSION)
+    IFS='.' read -r MAJ MIN PAT <<< "$OLD"
     case "{{ LEVEL }}" in
-        major) MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
-        minor) MINOR=$((MINOR + 1)); PATCH=0 ;;
-        patch) PATCH=$((PATCH + 1)) ;;
+        patch) PAT=$((PAT + 1)) ;;
+        minor) MIN=$((MIN + 1)); PAT=0 ;;
+        major) MAJ=$((MAJ + 1)); MIN=0; PAT=0 ;;
     esac
-    VERSION="${MAJOR}.${MINOR}.${PATCH}"
-    echo "$VERSION" > VERSION
-    sed -i -E "s/is \*\*v[0-9]+\.[0-9]+\.[0-9]+\*\*/is **v${VERSION}**/" SECURITY.md
-    go build ./...
+    VERSION="${MAJ}.${MIN}.${PAT}"
+    echo "Releasing v${OLD} -> v${VERSION}"
+    printf '%s\n' "$VERSION" > VERSION
+    # SECURITY.md names the current supported release.
+    sed -i -E "s/is \*\*v[0-9]+\.[0-9]+\.[0-9]+\*\*/is **v${VERSION}**/" \
+        SECURITY.md
+    # Promote [Unreleased] to [VERSION] with auto-generated entries from
+    # conventional commits since the last tag.
     TODAY=$(date -u +%Y-%m-%d)
     PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
     if [[ -n "$PREV_TAG" ]]; then
@@ -211,6 +225,8 @@ release LEVEL: release-check
             CHANGED+=("${BASH_REMATCH[3]}")
         fi
     done <<< "$COMMIT_LOG"
+    CL_SECTION=$(mktemp)
+    trap 'rm -f "$CL_SECTION"' EXIT
     {
         echo "## [Unreleased]"
         echo ""
@@ -233,16 +249,29 @@ release LEVEL: release-check
             echo ""
             for b in "${CHANGED[@]}"; do echo "- $b"; done
         fi
-    } > /tmp/smbark_cl_section
-    awk '
+        if (( ! ${#ADDED[@]} && ! ${#FIXED[@]} && ! ${#CHANGED[@]} )); then
+            echo ""
+            echo "### Changed"
+            echo ""
+            echo "- version bump only (no conventional commits since ${PREV_TAG})"
+        fi
+    } > "$CL_SECTION"
+    awk -v section="$CL_SECTION" '
         /^## \[Unreleased\]/ {
-            while ((getline line < "/tmp/smbark_cl_section") > 0) print line
+            while ((getline line < section) > 0) print line
             next
         }
         { print }
     ' CHANGELOG.md > CHANGELOG.md.tmp
     mv CHANGELOG.md.tmp CHANGELOG.md
-    rm -f /tmp/smbark_cl_section
+    # Refresh the link-reference footer.
+    REPO="https://github.com/z19r/smbark"
+    if grep -q '^\[Unreleased\]:' CHANGELOG.md; then
+        sed -i "s#^\[Unreleased\]:.*#[Unreleased]: ${REPO}/compare/v${VERSION}...HEAD#" \
+            CHANGELOG.md
+        printf '[%s]: %s/releases/tag/v%s\n' "$VERSION" "$REPO" "$VERSION" \
+            >> CHANGELOG.md
+    fi
     git checkout -b "release/v${VERSION}"
     git add VERSION CHANGELOG.md SECURITY.md
     git commit -m "release: v${VERSION}"
@@ -251,29 +280,101 @@ release LEVEL: release-check
         --title "release: v${VERSION}" \
         --body "Bump to v${VERSION} ({{ LEVEL }} release)" \
         --base main
+
     echo "Waiting for CI checks to appear..."
-    HAS_CHECKS=false
-    for i in $(seq 1 15); do
-        if gh pr checks --json name 2>/dev/null | grep -q name; then
-            HAS_CHECKS=true; break
-        fi
+    for i in $(seq 1 30); do
+        if gh pr checks --json name 2>/dev/null | grep -q name; then break; fi
         sleep 2
     done
-    if $HAS_CHECKS; then
-        echo "Watching CI checks..."
-        gh pr checks --watch --fail-fast
-    else
-        echo "No CI checks configured, skipping."
+    echo "Watching CI checks..."
+    gh pr checks --watch --fail-fast
+
+    # Cooper&Wright may auto-merge the PR first; only merge if still open.
+    if [[ "$(gh pr view --json state -q .state)" == "OPEN" ]]; then
+        echo "CI passed. Merging..."
+        gh pr merge --squash --delete-branch
     fi
-    echo "Merging..."
-    gh pr merge --squash --delete-branch
+
     git checkout main
     git pull --ff-only origin main
-    git tag -a "v${VERSION}" -m "v${VERSION}"
-    git push origin "v${VERSION}"
+
+    echo "Watching release workflow..."
+    sleep 5
+    RUN_ID=$(gh run list --workflow release.yml --branch main --limit 1 \
+        --json databaseId -q '.[0].databaseId')
+    gh run watch "$RUN_ID" --exit-status
+
     echo ""
-    echo "Release v${VERSION} tagged. GitHub Actions will build binaries, create the release, and (if PUBLISH_TO_AUR is enabled) publish to the AUR."
-    echo "  https://github.com/z19r/smbark/actions"
+    echo "Release v${VERSION} complete."
+
+# Cut a prerelease (beta) of the CURRENT VERSION: vX.Y.Z-beta.N.
+# The beta number auto-increments from existing tags. VERSION is left
+# untouched — betas lead up to the same X.Y.Z final. Usage: just prerelease
+prerelease:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [[ -n "$(git status --porcelain)" ]]; then
+        echo "Error: dirty working tree"; exit 1
+    fi
+    BRANCH=$(git rev-parse --abbrev-ref HEAD)
+    if [[ "$BRANCH" != "main" ]]; then
+        echo "Error: prerelease must run from main (on $BRANCH)"; exit 1
+    fi
+    # Refuse to promote an empty [Unreleased] section.
+    UNRELEASED=$(awk '
+        /^## \[Unreleased\]/ { found=1; next }
+        found && /^## \[/ { exit }
+        found && /^- / { print; exit }
+    ' CHANGELOG.md)
+    if [[ -z "$UNRELEASED" ]]; then
+        echo "Error: [Unreleased] section in CHANGELOG.md is empty."
+        echo "Add changelog entries before releasing."
+        exit 1
+    fi
+    # Release quality gate.
+    go build ./...
+    go vet ./...
+    go test ./...
+    # Beta of the current base version; next N from existing beta tags.
+    BASE=$(tr -d '[:space:]' < VERSION)
+    LAST=$(git tag -l "v${BASE}-beta.*" \
+        | sed "s/^v${BASE}-beta\.//" | sort -n | tail -1)
+    if [[ -z "${LAST:-}" ]]; then N=1; else N=$((LAST + 1)); fi
+    PRE="${BASE}-beta.${N}"
+    if git rev-parse -q --verify "refs/tags/v${PRE}" >/dev/null; then
+        echo "Error: tag v${PRE} already exists"; exit 1
+    fi
+    TODAY=$(date -u +%Y-%m-%d)
+    echo "Cutting prerelease v${PRE}"
+    # Promote [Unreleased] into a dated beta section, leaving a fresh
+    # empty Unreleased at the top. VERSION is intentionally not changed.
+    awk -v ver="$PRE" -v today="$TODAY" '
+        /^## \[Unreleased\]/ && !done {
+            print "## [Unreleased]"
+            print ""
+            print "## [" ver "] - " today
+            done = 1
+            next
+        }
+        { print }
+    ' CHANGELOG.md > CHANGELOG.md.tmp
+    mv CHANGELOG.md.tmp CHANGELOG.md
+    # Refresh the link-reference footer.
+    REPO="https://github.com/z19r/smbark"
+    if grep -q '^\[Unreleased\]:' CHANGELOG.md; then
+        sed -i "s#^\[Unreleased\]:.*#[Unreleased]: ${REPO}/compare/v${PRE}...HEAD#" \
+            CHANGELOG.md
+        printf '[%s]: %s/releases/tag/v%s\n' "$PRE" "$REPO" "$PRE" \
+            >> CHANGELOG.md
+    fi
+    git add CHANGELOG.md
+    git commit -m "release: v${PRE}"
+    git tag "v${PRE}"
+    echo ""
+    echo "Committed and tagged v${PRE} (VERSION stays ${BASE})."
+    echo "Push with: git push origin main && git push origin v${PRE}"
+    git push origin main
+    git push origin "v${PRE}"
 
 # ─── Cleanup ─────────────────────────────────────────────────────
 

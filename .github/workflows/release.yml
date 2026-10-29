@@ -1,41 +1,129 @@
 name: Release
 
 on:
+  # Stable releases: `just release` merges a PR that changes VERSION; this
+  # run creates the tag.
   push:
-    tags: ["v*"]
+    branches: [main]
+    paths: [VERSION]
+    # Prereleases: `just prerelease` pushes a vX.Y.Z-beta.N tag directly.
+    tags:
+      - "v*"
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  release:
+  check-tag:
+    name: Prepare release metadata
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Read version
+        id: version
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            TAG="${GITHUB_REF_NAME}"
+          else
+            TAG="v$(tr -d '[:space:]' < VERSION)"
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          if git rev-parse "${TAG}" >/dev/null 2>&1; then
+            echo "Tag ${TAG} already exists; continuing in recovery mode"
+          else
+            echo "Will create release ${TAG}"
+          fi
+
+  verify:
+    name: Verify release commit
+    needs: check-tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: extractions/setup-just@v4
+
+      - name: Release check
+        run: just release-check
+
+  goreleaser:
+    name: goreleaser
+    needs: [check-tag, verify]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+
+      # A tag pushed with GITHUB_TOKEN does not start another workflow run,
+      # so creating it here cannot double-release.
+      - name: Create tag if needed
+        env:
+          TAG: ${{ needs.check-tag.outputs.tag }}
+        run: |
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists"
+          else
+            git tag "$TAG"
+            git push origin "$TAG"
+          fi
+
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-      - uses: goreleaser/goreleaser-action@v7
+          cache: true
+
+      - name: Run goreleaser
+        uses: goreleaser/goreleaser-action@v7
         with:
+          distribution: goreleaser
+          version: "~> v2"
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-checksums: dist/checksums.txt
+
   publish-aur:
-    needs: release
-    if: vars.PUBLISH_TO_AUR == 'true'
+    name: Publish to AUR
+    needs: [check-tag, goreleaser]
+    # Stable releases only; betas never reach the AUR.
+    if: >-
+      vars.PUBLISH_TO_AUR == 'true' &&
+      !contains(needs.check-tag.outputs.tag, '-')
     runs-on: ubuntu-latest
     strategy:
       matrix:
         pkgname: [smbark-bin, smbark]
     steps:
       - uses: actions/checkout@v7
-      - name: Set pkgver from VERSION
+
+      - name: Set pkgver from tag
+        env:
+          TAG: ${{ needs.check-tag.outputs.tag }}
         run: |
-          PKGVER=$(cat VERSION)
-          sed -i "s/^pkgver=.*/pkgver=${PKGVER}/" "aur/${{ matrix.pkgname }}/PKGBUILD"
+          sed -i "s/^pkgver=.*/pkgver=${TAG#v}/" \
+            "aur/${{ matrix.pkgname }}/PKGBUILD"
+
       - name: Publish to AUR
         uses: KSXGitHub/github-actions-deploy-aur@v4.2.0
         with:
@@ -44,5 +132,5 @@ jobs:
           commit_username: Zack Kitzmiller
           commit_email: zackkitzmiller@gmail.com
           ssh_private_key: ${{ secrets.AUR_SSH_KEY }}
-          commit_message: "Update to ${{ github.ref_name }}"
+          commit_message: "Update to ${{ needs.check-tag.outputs.tag }}"
           updpkgsums: true
