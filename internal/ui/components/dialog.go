@@ -219,7 +219,9 @@ func (c ConfirmModel) View() string {
 	noStyle := lipgloss.NewStyle().Padding(0, 2)
 
 	if c.Yes {
-		yesStyle = yesStyle.Background(t.Green).Foreground(t.DarkerBackground).Bold(true)
+		yesStyle = yesStyle.Background(t.Green).
+			Foreground(t.DarkerBackground).
+			Bold(true)
 		noStyle = noStyle.Foreground(t.DarkForeground)
 	} else {
 		yesStyle = yesStyle.Foreground(t.DarkForeground)
@@ -328,13 +330,17 @@ func (s SelectModel) View() string {
 		rows = append(rows, row)
 	}
 
-	content := lipgloss.JoinVertical(lipgloss.Left,
+	content := lipgloss.JoinVertical(
+		lipgloss.Left,
 		"",
 		titleStyle.Render(fmt.Sprintf("  %s", s.Title)),
 		"",
 		strings.Join(rows, "\n"),
 		"",
-		lipgloss.NewStyle().Foreground(t.DarkForeground).Italic(true).Render("  ↑↓:navigate  enter:select  esc:cancel"),
+		lipgloss.NewStyle().
+			Foreground(t.DarkForeground).
+			Italic(true).
+			Render("  ↑↓:navigate  enter:select  esc:cancel"),
 		"",
 	)
 

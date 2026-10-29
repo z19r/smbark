@@ -10,14 +10,43 @@ permissions:
   contents: read
 
 jobs:
-  test:
+  build-test:
+    name: Build / Vet / Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-      - run: gofmt -l . | (! grep -q .) || (echo "Unformatted files" && exit 1)
-      - run: go vet ./...
-      - run: go build ./...
-      - run: go test ./...
+          cache: true
+
+      - name: gofmt
+        run: |
+          bad="$(gofmt -l .)"
+          if [ -n "$bad" ]; then
+            echo "These files are not gofmt-clean:"
+            echo "$bad"
+            exit 1
+          fi
+
+      - name: golines (max-len 80)
+        run: |
+          go install github.com/segmentio/golines@latest
+          bad="$("$(go env GOPATH)/bin/golines" \
+            --base-formatter=gofmt --max-len=80 \
+            --shorten-comments -l .)"
+          if [ -n "$bad" ]; then
+            echo "These files exceed the 80-col golines gate:"
+            echo "$bad"
+            exit 1
+          fi
+
+      - name: Build
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./...

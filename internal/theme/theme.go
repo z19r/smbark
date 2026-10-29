@@ -116,7 +116,15 @@ func loadOmarchy() *OmarchyColors {
 		return nil
 	}
 
-	activeTheme := filepath.Join(home, ".local", "state", "omarchy", "current", "theme", "colors.toml")
+	activeTheme := filepath.Join(
+		home,
+		".local",
+		"state",
+		"omarchy",
+		"current",
+		"theme",
+		"colors.toml",
+	)
 	if _, err := os.Stat(activeTheme); err == nil {
 		var oc OmarchyColors
 		if _, err := toml.DecodeFile(activeTheme, &oc); err == nil {
@@ -187,10 +195,16 @@ func (oc *OmarchyColors) normalize() {
 		oc.DarkBackground = or(oc.DarkBackground, darken(oc.Background, 0.1))
 	}
 	if oc.DarkerBackground == "" {
-		oc.DarkerBackground = or(oc.DarkerBackground, darken(oc.Background, 0.2))
+		oc.DarkerBackground = or(
+			oc.DarkerBackground,
+			darken(oc.Background, 0.2),
+		)
 	}
 	if oc.LighterBackground == "" {
-		oc.LighterBackground = or(oc.LighterBackground, lighten(oc.Background, 0.1))
+		oc.LighterBackground = or(
+			oc.LighterBackground,
+			lighten(oc.Background, 0.1),
+		)
 	}
 
 	// Detect mode from background luminance if not set
@@ -309,7 +323,10 @@ func (t *Theme) buildGradients() {
 	for i := 0; i < len(colors)-1; i++ {
 		from, _ := colorful.Hex(colors[i])
 		to, _ := colorful.Hex(colors[i+1])
-		t.GradientPairs = append(t.GradientPairs, GradientPair{From: from, To: to})
+		t.GradientPairs = append(
+			t.GradientPairs,
+			GradientPair{From: from, To: to},
+		)
 	}
 }
 
@@ -325,7 +342,11 @@ func (t *Theme) Rainbow(text string) string {
 			continue
 		}
 		color := t.rainbowColor(float64(i) / float64(len(runes)))
-		sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(color.Hex())).Render(string(r)))
+		sb.WriteString(
+			lipgloss.NewStyle().
+				Foreground(lipgloss.Color(color.Hex())).
+				Render(string(r)),
+		)
 	}
 	return sb.String()
 }
@@ -343,7 +364,11 @@ func (t *Theme) RainbowWithOffset(text string, offset float64) string {
 		}
 		pos := math.Mod(float64(i)/float64(len(runes))+offset, 1.0)
 		color := t.rainbowColor(pos)
-		sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(color.Hex())).Render(string(r)))
+		sb.WriteString(
+			lipgloss.NewStyle().
+				Foreground(lipgloss.Color(color.Hex())).
+				Render(string(r)),
+		)
 	}
 	return sb.String()
 }
@@ -363,7 +388,11 @@ func (t *Theme) Gradient(text string, from, to lipgloss.Color) string {
 		}
 		ratio := float64(i) / float64(max(len(runes)-1, 1))
 		c := c1.BlendHcl(c2, ratio)
-		sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(c.Hex())).Render(string(r)))
+		sb.WriteString(
+			lipgloss.NewStyle().
+				Foreground(lipgloss.Color(c.Hex())).
+				Render(string(r)),
+		)
 	}
 	return sb.String()
 }
@@ -393,7 +422,9 @@ func GradientBar(width int, t *Theme) string {
 	for i := range width {
 		pos := float64(i) / float64(max(width-1, 1))
 		c := t.rainbowColor(pos)
-		sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(c.Hex())).Render("━"))
+		sb.WriteString(
+			lipgloss.NewStyle().Foreground(lipgloss.Color(c.Hex())).Render("━"),
+		)
 	}
 	return sb.String()
 }
@@ -410,13 +441,19 @@ func SparkleText(text string, t *Theme) string {
 		}
 		pos := float64(i) / float64(max(len(runes)-1, 1))
 		c := t.rainbowColor(pos)
-		style := lipgloss.NewStyle().Foreground(lipgloss.Color(c.Hex())).Bold(true)
+		style := lipgloss.NewStyle().
+			Foreground(lipgloss.Color(c.Hex())).
+			Bold(true)
 		sb.WriteString(style.Render(string(r)))
 		if i > 0 && i%8 == 0 {
 			sparkle := sparkles[sparkIdx%len(sparkles)]
 			sparkIdx++
 			sc := t.rainbowColor(math.Mod(pos+0.3, 1.0))
-			sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(sc.Hex())).Render(sparkle))
+			sb.WriteString(
+				lipgloss.NewStyle().
+					Foreground(lipgloss.Color(sc.Hex())).
+					Render(sparkle),
+			)
 		}
 	}
 	return sb.String()
@@ -428,32 +465,50 @@ func RainbowBorder(width, height int, t *Theme) string {
 		for i := range w {
 			pos := math.Mod(float64(i)/float64(max(w-1, 1))+offset, 1.0)
 			c := t.rainbowColor(pos)
-			sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(c.Hex())).Render("━"))
+			sb.WriteString(
+				lipgloss.NewStyle().
+					Foreground(lipgloss.Color(c.Hex())).
+					Render("━"),
+			)
 		}
 		return sb.String()
 	}
 
 	lines := make([]string, height)
 
-	lines[0] = fmt.Sprintf("%s%s%s",
+	lines[0] = fmt.Sprintf(
+		"%s%s%s",
 		lipgloss.NewStyle().Foreground(t.RainbowColors[0]).Render("┏"),
 		topBottom(width-2, 0),
-		lipgloss.NewStyle().Foreground(t.RainbowColors[len(t.RainbowColors)-1]).Render("┓"))
+		lipgloss.NewStyle().
+			Foreground(t.RainbowColors[len(t.RainbowColors)-1]).
+			Render("┓"),
+	)
 
 	for i := 1; i < height-1; i++ {
 		pos := float64(i) / float64(max(height-1, 1))
 		lc := t.rainbowColor(pos)
 		rc := t.rainbowColor(1.0 - pos)
-		lines[i] = fmt.Sprintf("%s%s%s",
-			lipgloss.NewStyle().Foreground(lipgloss.Color(lc.Hex())).Render("┃"),
+		lines[i] = fmt.Sprintf(
+			"%s%s%s",
+			lipgloss.NewStyle().
+				Foreground(lipgloss.Color(lc.Hex())).
+				Render("┃"),
 			strings.Repeat(" ", width-2),
-			lipgloss.NewStyle().Foreground(lipgloss.Color(rc.Hex())).Render("┃"))
+			lipgloss.NewStyle().
+				Foreground(lipgloss.Color(rc.Hex())).
+				Render("┃"),
+		)
 	}
 
-	lines[height-1] = fmt.Sprintf("%s%s%s",
-		lipgloss.NewStyle().Foreground(t.RainbowColors[len(t.RainbowColors)-1]).Render("┗"),
+	lines[height-1] = fmt.Sprintf(
+		"%s%s%s",
+		lipgloss.NewStyle().
+			Foreground(t.RainbowColors[len(t.RainbowColors)-1]).
+			Render("┗"),
 		topBottom(width-2, 0.5),
-		lipgloss.NewStyle().Foreground(t.RainbowColors[0]).Render("┛"))
+		lipgloss.NewStyle().Foreground(t.RainbowColors[0]).Render("┛"),
+	)
 
 	return strings.Join(lines, "\n")
 }

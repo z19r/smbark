@@ -119,14 +119,29 @@ var sysExec = func(ctx context.Context, env []string, stdin, name string, args .
 // attemptCifsMount runs a single `mount -t cifs` with the given comma-joined
 // -o option string, returning the trimmed combined output. password, if
 // non-empty, is passed via the PASSWD env var (the inline-credentials path).
-func attemptCifsMount(sharePath, mountPoint, optString, password string) (string, error) {
+func attemptCifsMount(
+	sharePath, mountPoint, optString, password string,
+) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	var env []string
 	if password != "" {
 		env = []string{"PASSWD=" + password}
 	}
-	out, err := sysExec(ctx, env, "", "sudo", "-n", "mount", "-t", "cifs", sharePath, mountPoint, "-o", optString)
+	out, err := sysExec(
+		ctx,
+		env,
+		"",
+		"sudo",
+		"-n",
+		"mount",
+		"-t",
+		"cifs",
+		sharePath,
+		mountPoint,
+		"-o",
+		optString,
+	)
 	return strings.TrimSpace(out), err
 }
 
@@ -134,16 +149,25 @@ func attemptCifsMount(sharePath, mountPoint, optString, password string) (string
 // mounted on the first success and returning the version that worked. It only
 // advances to a lower dialect on a negotiation-style rejection; a credential or
 // connectivity error is returned immediately so it is not masked.
-func mountWithNegotiation(sharePath, mountPoint string, baseOpts, versions []string, password string) (string, error) {
+func mountWithNegotiation(
+	sharePath, mountPoint string,
+	baseOpts, versions []string,
+	password string,
+) (string, error) {
 	var lastErr error
 	for _, v := range versions {
-		optString := strings.Join(append([]string{"vers=" + v}, baseOpts...), ",")
+		optString := strings.Join(
+			append([]string{"vers=" + v}, baseOpts...),
+			",",
+		)
 		out, err := attemptCifsMount(sharePath, mountPoint, optString, password)
 		if err == nil {
 			return v, nil
 		}
 		if strings.Contains(out, "password is required") {
-			return "", fmt.Errorf("sudo requires a password — run 'sudo -v' in another terminal first")
+			return "", fmt.Errorf(
+				"sudo requires a password — run 'sudo -v' in another terminal first",
+			)
 		}
 		lastErr = fmt.Errorf("mount failed (vers=%s): %s", v, out)
 		if !isDialectError(out) {
@@ -236,14 +260,19 @@ func discoverSubnetScan(ctx context.Context) ([]Host, error) {
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			conn, err := net.DialTimeout("tcp", addr+":445", 500*time.Millisecond)
+			conn, err := net.DialTimeout(
+				"tcp",
+				addr+":445",
+				500*time.Millisecond,
+			)
 			if err != nil {
 				return
 			}
 			conn.Close()
 
 			name := addr
-			if names, err := net.LookupAddr(addr); err == nil && len(names) > 0 {
+			if names, err := net.LookupAddr(addr); err == nil &&
+				len(names) > 0 {
 				name = strings.TrimSuffix(names[0], ".")
 			}
 
@@ -284,7 +313,16 @@ func discoverAvahi(ctx context.Context) ([]Host, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	out, err := sysExec(ctx, nil, "", "avahi-browse", "-t", "-r", "-p", "_smb._tcp")
+	out, err := sysExec(
+		ctx,
+		nil,
+		"",
+		"avahi-browse",
+		"-t",
+		"-r",
+		"-p",
+		"_smb._tcp",
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -337,7 +375,11 @@ func parseNMB(combined string) []Host {
 	return hosts
 }
 
-func ListShares(ctx context.Context, host string, creds Credentials) ([]Share, error) {
+func ListShares(
+	ctx context.Context,
+	host string,
+	creds Credentials,
+) ([]Share, error) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
@@ -373,7 +415,8 @@ func parseSmbclientList(host, output string) []Share {
 			inShareList = true
 			continue
 		}
-		if strings.HasPrefix(trimmed, "---------") || strings.HasPrefix(trimmed, "=========") {
+		if strings.HasPrefix(trimmed, "---------") ||
+			strings.HasPrefix(trimmed, "=========") {
 			continue
 		}
 		if trimmed == "" {
@@ -467,7 +510,15 @@ func fillDiskUsage(s *Share) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	out, err := sysExec(ctx, nil, "", "df", "--output=size,used,avail", "-B1", s.MountPoint)
+	out, err := sysExec(
+		ctx,
+		nil,
+		"",
+		"df",
+		"--output=size,used,avail",
+		"-B1",
+		s.MountPoint,
+	)
 	if err != nil {
 		return
 	}
@@ -522,7 +573,8 @@ func MountShare(share Share, opts MountOptions) error {
 		mountPoint = filepath.Join("/mnt/smb", share.Host, share.Name)
 	}
 
-	// Tear down any automount (or stale mount) occupying the path first. Mounting
+	// Tear down any automount (or stale mount) occupying the path first.
+	// Mounting
 	// onto an active .automount point fails with ENODEV before any dialect is
 	// tried, which also aborts dialect negotiation — see clearAutomountAt.
 	clearAutomountAt(mountPoint)
@@ -562,7 +614,13 @@ func MountShare(share Share, opts MountOptions) error {
 		baseOpts = append(baseOpts, "ro")
 	}
 
-	_, err := mountWithNegotiation(share.Path, mountPoint, baseOpts, versionsToTry(opts.Version), opts.Creds.Password)
+	_, err := mountWithNegotiation(
+		share.Path,
+		mountPoint,
+		baseOpts,
+		versionsToTry(opts.Version),
+		opts.Creds.Password,
+	)
 	return err
 }
 
@@ -613,7 +671,11 @@ func CreateAutomount(cfg AutomountConfig) error {
 	clearAutomountAt(mountPoint)
 
 	if err := sudoRun("mkdir", "-p", mountPoint); err != nil {
-		return fmt.Errorf("failed to create mount point %s: %w", mountPoint, err)
+		return fmt.Errorf(
+			"failed to create mount point %s: %w",
+			mountPoint,
+			err,
+		)
 	}
 
 	credFile := ""
@@ -624,7 +686,11 @@ func CreateAutomount(cfg AutomountConfig) error {
 		}
 
 		credFile = filepath.Join(credDir, unitName)
-		credContent := fmt.Sprintf("username=%s\npassword=%s\n", cfg.Options.Creds.Username, cfg.Options.Creds.Password)
+		credContent := fmt.Sprintf(
+			"username=%s\npassword=%s\n",
+			cfg.Options.Creds.Username,
+			cfg.Options.Creds.Password,
+		)
 		if cfg.Options.Creds.Domain != "" {
 			credContent += fmt.Sprintf("domain=%s\n", cfg.Options.Creds.Domain)
 		}
@@ -650,7 +716,10 @@ func CreateAutomount(cfg AutomountConfig) error {
 	}
 	baseOpts = append(baseOpts, fmt.Sprintf("uid=%s", cfg.Options.UID))
 	baseOpts = append(baseOpts, fmt.Sprintf("gid=%s", cfg.Options.GID))
-	baseOpts = append(baseOpts, fmt.Sprintf("file_mode=%s", cfg.Options.FileMode))
+	baseOpts = append(
+		baseOpts,
+		fmt.Sprintf("file_mode=%s", cfg.Options.FileMode),
+	)
 	baseOpts = append(baseOpts, fmt.Sprintf("dir_mode=%s", cfg.Options.DirMode))
 	baseOpts = append(baseOpts, "_netdev")
 
@@ -658,9 +727,19 @@ func CreateAutomount(cfg AutomountConfig) error {
 	// will remount on demand. The version that worked is baked into the unit.
 	// Credentials come from the cred file (or it is a guest mount), so no
 	// PASSWD env is needed for the probe.
-	version, err := mountWithNegotiation(cfg.Share.Path, mountPoint, baseOpts, versionsToTry(cfg.Options.Version), "")
+	version, err := mountWithNegotiation(
+		cfg.Share.Path,
+		mountPoint,
+		baseOpts,
+		versionsToTry(cfg.Options.Version),
+		"",
+	)
 	if err != nil {
-		return fmt.Errorf("could not negotiate an SMB dialect for %s: %w", cfg.Share.Path, err)
+		return fmt.Errorf(
+			"could not negotiate an SMB dialect for %s: %w",
+			cfg.Share.Path,
+			err,
+		)
 	}
 	sudoRun("umount", "-l", mountPoint)
 	mountOpts := append([]string{"vers=" + version}, baseOpts...)
@@ -717,7 +796,8 @@ WantedBy=multi-user.target
 		return fmt.Errorf("start failed: %w", err)
 	}
 
-	// Trigger the mount immediately so it shows up in /proc/mounts. Starting the
+	// Trigger the mount immediately so it shows up in /proc/mounts. Starting
+	// the
 	// .mount unit directly while the .automount is active fails with ENODEV;
 	// reading the directory lets autofs perform the mount the normal way.
 	sudoRun("ls", mountPoint)
@@ -728,11 +808,19 @@ WantedBy=multi-user.target
 func sudoRun(args ...string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	out, err := sysExec(ctx, nil, "", "sudo", append([]string{"-n"}, args...)...)
+	out, err := sysExec(
+		ctx,
+		nil,
+		"",
+		"sudo",
+		append([]string{"-n"}, args...)...)
 	if err != nil {
 		outStr := strings.TrimSpace(out)
-		if strings.Contains(outStr, "password is required") || strings.Contains(outStr, "a password is required") {
-			return fmt.Errorf("sudo requires a password — run 'sudo -v' in another terminal first")
+		if strings.Contains(outStr, "password is required") ||
+			strings.Contains(outStr, "a password is required") {
+			return fmt.Errorf(
+				"sudo requires a password — run 'sudo -v' in another terminal first",
+			)
 		}
 		return fmt.Errorf("%s: %s", args[0], outStr)
 	}
@@ -745,8 +833,11 @@ func sudoWrite(path, content string) error {
 	out, err := sysExec(ctx, nil, content, "sudo", "-n", "tee", path)
 	if err != nil {
 		errStr := strings.TrimSpace(out)
-		if strings.Contains(errStr, "password is required") || strings.Contains(errStr, "a password is required") {
-			return fmt.Errorf("sudo requires a password — run 'sudo -v' in another terminal first")
+		if strings.Contains(errStr, "password is required") ||
+			strings.Contains(errStr, "a password is required") {
+			return fmt.Errorf(
+				"sudo requires a password — run 'sudo -v' in another terminal first",
+			)
 		}
 		return fmt.Errorf("write %s: %s", path, errStr)
 	}
@@ -789,7 +880,17 @@ func RemoveAutomount(mountPoint string) error {
 func GetAutomounts() ([]AutomountConfig, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	out, err := sysExec(ctx, nil, "", "systemctl", "list-units", "--type=automount", "--all", "--no-legend", "--no-pager")
+	out, err := sysExec(
+		ctx,
+		nil,
+		"",
+		"systemctl",
+		"list-units",
+		"--type=automount",
+		"--all",
+		"--no-legend",
+		"--no-pager",
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -807,7 +908,15 @@ func GetAutomounts() ([]AutomountConfig, error) {
 		}
 
 		mountUnit := strings.TrimSuffix(unit, ".automount") + ".mount"
-		showOut, err := sysExec(ctx, nil, "", "systemctl", "show", mountUnit, "--property=What,Where,Options,Result")
+		showOut, err := sysExec(
+			ctx,
+			nil,
+			"",
+			"systemctl",
+			"show",
+			mountUnit,
+			"--property=What,Where,Options,Result",
+		)
 		if err != nil {
 			continue
 		}
@@ -817,13 +926,17 @@ func GetAutomounts() ([]AutomountConfig, error) {
 			continue
 		}
 		autoUnit, _ := readFile(filepath.Join(systemdUnitDir, unit))
-		cfg.Issues = detectAutomountIssues(string(autoUnit), parseShowProps(showOut)["Result"])
+		cfg.Issues = detectAutomountIssues(
+			string(autoUnit),
+			parseShowProps(showOut)["Result"],
+		)
 		configs = append(configs, cfg)
 	}
 	return configs, nil
 }
 
-// parseAutomountShow turns `systemctl show <unit>.mount --property=What,Where,Options`
+// parseAutomountShow turns `systemctl show <unit>.mount
+// --property=What,Where,Options`
 // key=value output into an AutomountConfig. ok is false when the What property
 // is not a CIFS UNC path.
 func parseAutomountShow(showOutput string) (AutomountConfig, bool) {
@@ -896,9 +1009,12 @@ func FixAutomount(cfg AutomountConfig) error {
 	for _, issue := range cfg.Issues {
 		switch issue {
 		case IssueBootCycle:
-			fixErr = rewriteUnit(automountPath, func(unit string) (string, error) {
-				return stripNetworkOrdering(unit), nil
-			})
+			fixErr = rewriteUnit(
+				automountPath,
+				func(unit string) (string, error) {
+					return stripNetworkOrdering(unit), nil
+				},
+			)
 		case IssueMountFailing:
 			fixErr = renegotiateMountUnit(cfg, mountPath)
 		}
@@ -907,11 +1023,13 @@ func FixAutomount(cfg AutomountConfig) error {
 		}
 	}
 
-	if err := sudoRun("systemctl", "daemon-reload"); err != nil && fixErr == nil {
+	if err := sudoRun("systemctl", "daemon-reload"); err != nil &&
+		fixErr == nil {
 		fixErr = fmt.Errorf("daemon-reload failed: %w", err)
 	}
 	sudoRun("systemctl", "reset-failed", unitName+".mount")
-	if err := sudoRun("systemctl", "start", unitName+".automount"); err != nil && fixErr == nil {
+	if err := sudoRun("systemctl", "start", unitName+".automount"); err != nil &&
+		fixErr == nil {
 		fixErr = fmt.Errorf("start failed: %w", err)
 	}
 	if fixErr != nil {
@@ -960,13 +1078,26 @@ func renegotiateMountUnit(cfg AutomountConfig, mountPath string) error {
 
 		// The probe must bind the path directly, not through the autofs point.
 		clearAutomountAt(cfg.MountPoint)
-		version, err := mountWithNegotiation(cfg.Share.Path, cfg.MountPoint, baseOpts, autoDialects, "")
+		version, err := mountWithNegotiation(
+			cfg.Share.Path,
+			cfg.MountPoint,
+			baseOpts,
+			autoDialects,
+			"",
+		)
 		if err != nil {
-			return "", fmt.Errorf("could not negotiate an SMB dialect for %s: %w", cfg.Share.Path, err)
+			return "", fmt.Errorf(
+				"could not negotiate an SMB dialect for %s: %w",
+				cfg.Share.Path,
+				err,
+			)
 		}
 		sudoRun("umount", "-l", cfg.MountPoint)
 
-		lines[idx] = "Options=" + strings.Join(append([]string{"vers=" + version}, baseOpts...), ",")
+		lines[idx] = "Options=" + strings.Join(
+			append([]string{"vers=" + version}, baseOpts...),
+			",",
+		)
 		return strings.Join(lines, "\n"), nil
 	})
 }
@@ -982,7 +1113,18 @@ func CheckConnectivity(host string) (time.Duration, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	_, err := sysExec(ctx, nil, "", "smbclient", "-L", host, "-N", "--no-pass", "-m", "SMB3")
+	_, err := sysExec(
+		ctx,
+		nil,
+		"",
+		"smbclient",
+		"-L",
+		host,
+		"-N",
+		"--no-pass",
+		"-m",
+		"SMB3",
+	)
 	elapsed := time.Since(start)
 	if err != nil {
 		if _, err2 := sysExec(ctx, nil, "", "ping", "-c", "1", "-W", "2", host); err2 != nil {
@@ -1038,7 +1180,11 @@ func AddFstabEntry(share Share, opts MountOptions) error {
 	}
 
 	if err := sudoRun("mkdir", "-p", mountPoint); err != nil {
-		return fmt.Errorf("failed to create mount point %s: %w", mountPoint, err)
+		return fmt.Errorf(
+			"failed to create mount point %s: %w",
+			mountPoint,
+			err,
+		)
 	}
 
 	// baseOpts excludes vers=; the concrete dialect is resolved by probing so
@@ -1046,11 +1192,19 @@ func AddFstabEntry(share Share, opts MountOptions) error {
 	// the "auto" sentinel — it must be a literal mount option).
 	var baseOpts []string
 	if opts.Creds.Username != "" {
-		credFile := fmt.Sprintf("/etc/samba/credentials/%s-%s", share.Host, share.Name)
+		credFile := fmt.Sprintf(
+			"/etc/samba/credentials/%s-%s",
+			share.Host,
+			share.Name,
+		)
 		if err := sudoRun("mkdir", "-p", "/etc/samba/credentials"); err != nil {
 			return fmt.Errorf("failed to create credentials dir: %w", err)
 		}
-		credContent := fmt.Sprintf("username=%s\npassword=%s\n", opts.Creds.Username, opts.Creds.Password)
+		credContent := fmt.Sprintf(
+			"username=%s\npassword=%s\n",
+			opts.Creds.Username,
+			opts.Creds.Password,
+		)
 		if opts.Creds.Domain != "" {
 			credContent += fmt.Sprintf("domain=%s\n", opts.Creds.Domain)
 		}
@@ -1069,9 +1223,19 @@ func AddFstabEntry(share Share, opts MountOptions) error {
 		baseOpts = append(baseOpts, "gid="+opts.GID)
 	}
 
-	version, err := mountWithNegotiation(share.Path, mountPoint, baseOpts, versionsToTry(opts.Version), "")
+	version, err := mountWithNegotiation(
+		share.Path,
+		mountPoint,
+		baseOpts,
+		versionsToTry(opts.Version),
+		"",
+	)
 	if err != nil {
-		return fmt.Errorf("could not negotiate an SMB dialect for %s: %w", share.Path, err)
+		return fmt.Errorf(
+			"could not negotiate an SMB dialect for %s: %w",
+			share.Path,
+			err,
+		)
 	}
 	sudoRun("umount", "-l", mountPoint)
 

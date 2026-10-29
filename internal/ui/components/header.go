@@ -44,7 +44,12 @@ func RenderHeader(width int, frame float64) string {
 		Render(header)
 }
 
-func RenderStatusBar(width int, activeTab string, mountedCount int, t *theme.Theme) string {
+func RenderStatusBar(
+	width int,
+	activeTab string,
+	mountedCount int,
+	t *theme.Theme,
+) string {
 	left := lipgloss.NewStyle().
 		Foreground(t.DarkerBackground).
 		Background(t.Accent).
@@ -63,7 +68,16 @@ func RenderStatusBar(width int, activeTab string, mountedCount int, t *theme.The
 		Padding(0, 1).
 		Render("q:quit  ?:help  tab:switch")
 
-	gap := max(width-lipgloss.Width(left)-lipgloss.Width(mountBadge)-lipgloss.Width(right), 0)
+	gap := max(
+		width-lipgloss.Width(
+			left,
+		)-lipgloss.Width(
+			mountBadge,
+		)-lipgloss.Width(
+			right,
+		),
+		0,
+	)
 
 	bar := lipgloss.NewStyle().
 		Background(t.DarkBackground).
