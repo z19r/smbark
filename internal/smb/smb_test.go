@@ -1465,3 +1465,231 @@ func TestCreateAutomount_DaemonReloadFails(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+// --- automount issues / FixAutomount ----------------------------------------
+
+// fakeFiles replaces readFile with an in-memory filesystem for the test.
+func fakeFiles(files map[string]string) func() {
+	prev := readFile
+	readFile = func(path string) ([]byte, error) {
+		data, ok := files[path]
+		if !ok {
+			return nil, os.ErrNotExist
+		}
+		return []byte(data), nil
+	}
+	return func() { readFile = prev }
+}
+
+const cycleAutomountUnit = `[Unit]
+Description=SMB automount for //h/s
+After=network-online.target
+Wants=network-online.target
+
+[Automount]
+Where=/mnt/smb/h/s
+TimeoutIdleSec=300
+`
+
+const pinnedMountUnit = `[Unit]
+Description=SMB mount for //h/s
+After=network-online.target
+Wants=network-online.target
+
+[Mount]
+What=//h/s
+Where=/mnt/smb/h/s
+Type=cifs
+Options=vers=3.0,sec=ntlmssp,credentials=/etc/samba/credentials/mnt-smb-h-s,uid=1000,_netdev
+`
+
+func TestDetectAutomountIssues(t *testing.T) {
+	cases := []struct {
+		unit, result string
+		want         []AutomountIssue
+	}{
+		{"[Automount]\nWhere=/x\n", "success", nil},
+		{"[Automount]\nWhere=/x\n", "", nil},
+		{cycleAutomountUnit, "success", []AutomountIssue{IssueBootCycle}},
+		{"[Automount]\n", "exit-code", []AutomountIssue{IssueMountFailing}},
+		{cycleAutomountUnit, "exit-code", []AutomountIssue{IssueBootCycle, IssueMountFailing}},
+	}
+	for _, c := range cases {
+		if got := detectAutomountIssues(c.unit, c.result); !reflect.DeepEqual(got, c.want) {
+			t.Errorf("detect(%q, %q) = %v, want %v", c.unit, c.result, got, c.want)
+		}
+	}
+}
+
+func TestStripNetworkOrdering(t *testing.T) {
+	got := stripNetworkOrdering(cycleAutomountUnit)
+	if strings.Contains(got, "network-online") {
+		t.Errorf("network ordering left in: %q", got)
+	}
+	if !strings.Contains(got, "Where=/mnt/smb/h/s") || !strings.Contains(got, "[Automount]") {
+		t.Errorf("unrelated lines dropped: %q", got)
+	}
+}
+
+func TestGetAutomounts_DetectsIssues(t *testing.T) {
+	defer fakeFiles(map[string]string{
+		"/etc/systemd/system/mnt-smb-h-s.automount": cycleAutomountUnit,
+	})()
+	f := &fakeSys{respond: func(name string, args []string, _ string) (string, error) {
+		if args[0] == "list-units" {
+			return "mnt-smb-h-s.automount loaded active waiting x\n", nil
+		}
+		return "What=//h/s\nWhere=/mnt/smb/h/s\nResult=exit-code\n", nil
+	}}
+	defer f.install()()
+
+	cfgs, err := GetAutomounts()
+	if err != nil || len(cfgs) != 1 {
+		t.Fatalf("cfgs = %+v, err = %v", cfgs, err)
+	}
+	want := []AutomountIssue{IssueBootCycle, IssueMountFailing}
+	if !reflect.DeepEqual(cfgs[0].Issues, want) {
+		t.Errorf("issues = %v, want %v", cfgs[0].Issues, want)
+	}
+}
+
+func TestFixAutomount_BootCycle(t *testing.T) {
+	defer fakeFiles(map[string]string{
+		"/etc/systemd/system/mnt-smb-h-s.automount": cycleAutomountUnit,
+	})()
+	f := &fakeSys{respond: func(name string, args []string, _ string) (string, error) {
+		if name == "systemd-escape" {
+			return "mnt-smb-h-s", nil
+		}
+		return "", nil
+	}}
+	defer f.install()()
+
+	err := FixAutomount(AutomountConfig{
+		Share:      Share{Path: "//h/s"},
+		MountPoint: "/mnt/smb/h/s",
+		Issues:     []AutomountIssue{IssueBootCycle},
+	})
+	if err != nil {
+		t.Fatalf("FixAutomount error: %v", err)
+	}
+	unit, ok := f.stdinForTee(".automount")
+	if !ok {
+		t.Fatal(".automount unit not rewritten")
+	}
+	if strings.Contains(unit, "network-online") {
+		t.Errorf("cycle not removed: %q", unit)
+	}
+	// A cycle-only fix must not tear down a working mount or touch .mount.
+	if f.contains("mount -t cifs") || f.contains("umount") {
+		t.Error("cycle fix must not remount the share")
+	}
+	if _, ok := f.stdinForTee(".mount"); ok {
+		t.Error("cycle fix must not rewrite the .mount unit")
+	}
+	if !f.contains("systemctl daemon-reload") ||
+		!f.contains("systemctl start mnt-smb-h-s.automount") {
+		t.Errorf("missing reload/start: %v", f.lines())
+	}
+}
+
+func TestFixAutomount_RenegotiatesDialect(t *testing.T) {
+	defer fakeFiles(map[string]string{
+		"/etc/systemd/system/mnt-smb-h-s.mount": pinnedMountUnit,
+	})()
+	f := &fakeSys{}
+	f.respond = func(name string, args []string, stdin string) (string, error) {
+		if name == "systemd-escape" {
+			return "mnt-smb-h-s", nil
+		}
+		return mountResponder("2.0")(name, args, stdin)
+	}
+	defer f.install()()
+
+	err := FixAutomount(AutomountConfig{
+		Share:      Share{Path: "//h/s"},
+		MountPoint: "/mnt/smb/h/s",
+		Issues:     []AutomountIssue{IssueMountFailing},
+	})
+	if err != nil {
+		t.Fatalf("FixAutomount error: %v", err)
+	}
+	if !reflect.DeepEqual(f.mountAttempts(), []string{"3.1.1", "3.0", "2.1", "2.0"}) {
+		t.Errorf("probe attempts = %v", f.mountAttempts())
+	}
+	// The probe keeps the unit's other options (including credentials=).
+	if !strings.Contains(f.optStringFor("2.0"), "credentials=/etc/samba/credentials/mnt-smb-h-s") {
+		t.Errorf("probe dropped unit options: %q", f.optStringFor("2.0"))
+	}
+	unit, ok := f.stdinForTee(".mount")
+	if !ok {
+		t.Fatal(".mount unit not rewritten")
+	}
+	want := "Options=vers=2.0,sec=ntlmssp,credentials=/etc/samba/credentials/mnt-smb-h-s,uid=1000,_netdev\n"
+	if !strings.Contains(unit, want) || strings.Contains(unit, "vers=3.0") {
+		t.Errorf("unit = %q, want line %q", unit, want)
+	}
+	if !f.contains("systemctl reset-failed mnt-smb-h-s.mount") {
+		t.Error("missing reset-failed")
+	}
+	if f.index("systemctl start mnt-smb-h-s.automount") < f.index("tee /etc/systemd/system/mnt-smb-h-s.mount") {
+		t.Error("automount must be restarted after the unit is rewritten")
+	}
+	if !f.contains("ls /mnt/smb/h/s") {
+		t.Error("expected autofs trigger after a successful fix")
+	}
+}
+
+func TestFixAutomount_FailureStillRestartsAutomount(t *testing.T) {
+	defer fakeFiles(map[string]string{
+		"/etc/systemd/system/mnt-smb-h-s.mount": pinnedMountUnit,
+	})()
+	f := &fakeSys{}
+	f.respond = func(name string, args []string, stdin string) (string, error) {
+		if name == "systemd-escape" {
+			return "mnt-smb-h-s", nil
+		}
+		return mountResponder("nope")(name, args, stdin)
+	}
+	defer f.install()()
+
+	err := FixAutomount(AutomountConfig{
+		Share:      Share{Path: "//h/s"},
+		MountPoint: "/mnt/smb/h/s",
+		Issues:     []AutomountIssue{IssueMountFailing},
+	})
+	if err == nil || !strings.Contains(err.Error(), "could not negotiate") {
+		t.Fatalf("err = %v, want negotiation failure", err)
+	}
+	if _, ok := f.stdinForTee(".mount"); ok {
+		t.Error("must not rewrite .mount when negotiation fails")
+	}
+	// The probe stopped the automount; it must be brought back.
+	if !f.contains("systemctl start mnt-smb-h-s.automount") {
+		t.Error("automount left stopped after a failed fix")
+	}
+}
+
+func TestFixAutomount_MissingOptions(t *testing.T) {
+	defer fakeFiles(map[string]string{
+		"/etc/systemd/system/mnt-smb-h-s.mount": "[Mount]\nWhat=//h/s\n",
+	})()
+	f := &fakeSys{respond: func(name string, args []string, _ string) (string, error) {
+		if name == "systemd-escape" {
+			return "mnt-smb-h-s", nil
+		}
+		return "", nil
+	}}
+	defer f.install()()
+
+	err := FixAutomount(AutomountConfig{
+		MountPoint: "/mnt/smb/h/s",
+		Issues:     []AutomountIssue{IssueMountFailing},
+	})
+	if err == nil || !strings.Contains(err.Error(), "no Options=") {
+		t.Fatalf("err = %v", err)
+	}
+	if f.contains("mount -t cifs") {
+		t.Error("must not probe without the unit's options")
+	}
+}

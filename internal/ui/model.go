@@ -176,6 +176,13 @@ func createAutomount(cfg smb.AutomountConfig) tea.Cmd {
 	}
 }
 
+func fixAutomount(cfg smb.AutomountConfig) tea.Cmd {
+	return func() tea.Msg {
+		err := smb.FixAutomount(cfg)
+		return AutomountFixMsg{Config: cfg, Err: err}
+	}
+}
+
 func removeAutomount(mountPoint string) tea.Cmd {
 	return func() tea.Msg {
 		err := smb.RemoveAutomount(mountPoint)
@@ -356,6 +363,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.setStatus(fmt.Sprintf("Automount configured for %s", msg.Config.Share.Path), false)
 		return m, tea.Batch(loadMountedShares, loadAutomounts)
 
+	case AutomountFixMsg:
+		if msg.Err != nil {
+			if m.handleSudoError(msg.Err, fixAutomount(msg.Config)) {
+				return m, m.promptSudo()
+			}
+			m.setStatus(fmt.Sprintf("Automount fix failed: %v", msg.Err), true)
+			return m, loadAutomounts
+		}
+		m.setStatus(fmt.Sprintf("Fixed automount for %s", msg.Config.Share.Path), false)
+		return m, tea.Batch(loadMountedShares, loadAutomounts)
+
 	case AutomountRemoveMsg:
 		if msg.Err != nil {
 			if m.handleSudoError(msg.Err, removeAutomount(msg.MountPoint)) {
@@ -530,6 +548,11 @@ func (m *Model) handleAutomountKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "r":
 		return m, loadAutomounts
+	case "f":
+		if cfg, ok := m.selectedAutomount(); ok && len(cfg.Issues) > 0 {
+			m.setStatus(fmt.Sprintf("Fixing automount for %s...", cfg.Share.Path), false)
+			return m, fixAutomount(cfg)
+		}
 	case "d", "delete":
 		if len(m.automounts) > 0 {
 			idx := m.automountList.Index()
@@ -547,6 +570,15 @@ func (m *Model) handleAutomountKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	m.automountList, cmd = m.automountList.Update(msg)
 	return m, cmd
+}
+
+// selectedAutomount returns the automount highlighted in the Automount tab.
+func (m Model) selectedAutomount() (smb.AutomountConfig, bool) {
+	idx := m.automountList.Index()
+	if idx < 0 || idx >= len(m.automounts) {
+		return smb.AutomountConfig{}, false
+	}
+	return m.automounts[idx], true
 }
 
 func (m *Model) handleConfigKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -826,7 +858,15 @@ func (m *Model) rebuildLists() {
 	for _, cfg := range m.automounts {
 		s := cfg.Share
 		s.IsAutomount = true
-		automountItems = append(automountItems, components.ShareItem{Share: s})
+		item := components.ShareItem{Share: s}
+		if len(cfg.Issues) > 0 {
+			issues := make([]string, len(cfg.Issues))
+			for i, issue := range cfg.Issues {
+				issues[i] = string(issue)
+			}
+			item.Warning = strings.Join(issues, ", ") + " — press f to fix"
+		}
+		automountItems = append(automountItems, item)
 	}
 	m.automountList = list.New(automountItems, delegate, contentWidth, contentHeight)
 	m.automountList.Title = ""
@@ -1057,9 +1097,13 @@ func (m Model) renderAutomountView() string {
 	}
 
 	title := t.Gradient(fmt.Sprintf("  %d Automount(s)", len(m.automounts)), t.Yellow, t.Orange)
+	keys := "  d:remove  r:refresh"
+	if cfg, ok := m.selectedAutomount(); ok && len(cfg.Issues) > 0 {
+		keys += "  f:fix"
+	}
 	hint := lipgloss.NewStyle().
 		Foreground(t.DarkForeground).
-		Render("  d:remove  r:refresh")
+		Render(keys)
 
 	return lipgloss.JoinVertical(lipgloss.Left,
 		title,

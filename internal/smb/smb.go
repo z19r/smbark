@@ -578,7 +578,27 @@ type AutomountConfig struct {
 	Share      Share
 	MountPoint string
 	Options    MountOptions
+	Issues     []AutomountIssue
 }
+
+// AutomountIssue is a known-broken state of an installed automount that
+// FixAutomount can repair.
+type AutomountIssue string
+
+const (
+	// IssueBootCycle: the .automount orders itself after network-online.target.
+	// systemd implicitly orders automounts Before=local-fs.target, so this
+	// forms a boot ordering cycle (units written by smbark <= 1.2.1).
+	IssueBootCycle AutomountIssue = "boot ordering cycle"
+	// IssueMountFailing: the last on-demand mount failed, typically because
+	// the unit pins an SMB dialect the server rejects. The fix re-negotiates.
+	IssueMountFailing AutomountIssue = "last mount failed"
+)
+
+const systemdUnitDir = "/etc/systemd/system"
+
+// readFile is the seam for reading unit files; tests replace it.
+var readFile = os.ReadFile
 
 func CreateAutomount(cfg AutomountConfig) error {
 	mountPoint := cfg.MountPoint
@@ -677,8 +697,8 @@ TimeoutIdleSec=300
 WantedBy=multi-user.target
 `, cfg.Share.Path, mountPoint)
 
-	mountPath := filepath.Join("/etc/systemd/system", unitName+".mount")
-	automountPath := filepath.Join("/etc/systemd/system", unitName+".automount")
+	mountPath := filepath.Join(systemdUnitDir, unitName+".mount")
+	automountPath := filepath.Join(systemdUnitDir, unitName+".automount")
 
 	if err := sudoWrite(mountPath, mountUnit); err != nil {
 		return fmt.Errorf("failed to write mount unit: %w", err)
@@ -787,7 +807,7 @@ func GetAutomounts() ([]AutomountConfig, error) {
 		}
 
 		mountUnit := strings.TrimSuffix(unit, ".automount") + ".mount"
-		showOut, err := sysExec(ctx, nil, "", "systemctl", "show", mountUnit, "--property=What,Where,Options")
+		showOut, err := sysExec(ctx, nil, "", "systemctl", "show", mountUnit, "--property=What,Where,Options,Result")
 		if err != nil {
 			continue
 		}
@@ -796,6 +816,8 @@ func GetAutomounts() ([]AutomountConfig, error) {
 		if !ok {
 			continue
 		}
+		autoUnit, _ := readFile(filepath.Join(systemdUnitDir, unit))
+		cfg.Issues = detectAutomountIssues(string(autoUnit), parseShowProps(showOut)["Result"])
 		configs = append(configs, cfg)
 	}
 	return configs, nil
@@ -805,14 +827,7 @@ func GetAutomounts() ([]AutomountConfig, error) {
 // key=value output into an AutomountConfig. ok is false when the What property
 // is not a CIFS UNC path.
 func parseAutomountShow(showOutput string) (AutomountConfig, bool) {
-	props := make(map[string]string)
-	for _, line := range strings.Split(showOutput, "\n") {
-		parts := strings.SplitN(line, "=", 2)
-		if len(parts) == 2 {
-			props[parts[0]] = parts[1]
-		}
-	}
-
+	props := parseShowProps(showOutput)
 	what := props["What"]
 	if !strings.HasPrefix(what, "//") {
 		return AutomountConfig{}, false
@@ -828,6 +843,132 @@ func parseAutomountShow(showOutput string) (AutomountConfig, bool) {
 		},
 		MountPoint: props["Where"],
 	}, true
+}
+
+// parseShowProps parses `systemctl show` key=value output.
+func parseShowProps(showOutput string) map[string]string {
+	props := make(map[string]string)
+	for _, line := range strings.Split(showOutput, "\n") {
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) == 2 {
+			props[parts[0]] = parts[1]
+		}
+	}
+	return props
+}
+
+// detectAutomountIssues inspects an .automount unit's contents and its
+// .mount unit's systemd Result for problems FixAutomount can repair.
+func detectAutomountIssues(automountUnit, mountResult string) []AutomountIssue {
+	var issues []AutomountIssue
+	if strings.Contains(automountUnit, "network-online.target") {
+		issues = append(issues, IssueBootCycle)
+	}
+	if mountResult != "" && mountResult != "success" {
+		issues = append(issues, IssueMountFailing)
+	}
+	return issues
+}
+
+// stripNetworkOrdering removes network-online.target ordering lines from an
+// .automount unit (see IssueBootCycle).
+func stripNetworkOrdering(unit string) string {
+	var kept []string
+	for _, line := range strings.Split(unit, "\n") {
+		switch strings.TrimSpace(line) {
+		case "After=network-online.target", "Wants=network-online.target":
+			continue
+		}
+		kept = append(kept, line)
+	}
+	return strings.Join(kept, "\n")
+}
+
+// FixAutomount repairs the issues detected on cfg. The automount is reloaded
+// and restarted even if a repair fails, so a failed fix never leaves the
+// share without its automount.
+func FixAutomount(cfg AutomountConfig) error {
+	unitName := unitNameForPath(cfg.MountPoint)
+	automountPath := filepath.Join(systemdUnitDir, unitName+".automount")
+	mountPath := filepath.Join(systemdUnitDir, unitName+".mount")
+
+	var fixErr error
+	for _, issue := range cfg.Issues {
+		switch issue {
+		case IssueBootCycle:
+			fixErr = rewriteUnit(automountPath, func(unit string) (string, error) {
+				return stripNetworkOrdering(unit), nil
+			})
+		case IssueMountFailing:
+			fixErr = renegotiateMountUnit(cfg, mountPath)
+		}
+		if fixErr != nil {
+			break
+		}
+	}
+
+	if err := sudoRun("systemctl", "daemon-reload"); err != nil && fixErr == nil {
+		fixErr = fmt.Errorf("daemon-reload failed: %w", err)
+	}
+	sudoRun("systemctl", "reset-failed", unitName+".mount")
+	if err := sudoRun("systemctl", "start", unitName+".automount"); err != nil && fixErr == nil {
+		fixErr = fmt.Errorf("start failed: %w", err)
+	}
+	if fixErr != nil {
+		return fixErr
+	}
+	// Trigger the mount through autofs, as CreateAutomount does.
+	sudoRun("ls", cfg.MountPoint)
+	return nil
+}
+
+// rewriteUnit reads a unit file, transforms it and writes it back via sudo.
+func rewriteUnit(path string, transform func(string) (string, error)) error {
+	data, err := readFile(path)
+	if err != nil {
+		return fmt.Errorf("read %s: %w", path, err)
+	}
+	unit, err := transform(string(data))
+	if err != nil {
+		return err
+	}
+	return sudoWrite(path, unit)
+}
+
+// renegotiateMountUnit probes for a dialect the server accepts, keeping the
+// unit's other options, and rewrites its Options= line to pin that dialect.
+func renegotiateMountUnit(cfg AutomountConfig, mountPath string) error {
+	return rewriteUnit(mountPath, func(unit string) (string, error) {
+		lines := strings.Split(unit, "\n")
+		idx := -1
+		for i, line := range lines {
+			if strings.HasPrefix(line, "Options=") {
+				idx = i
+				break
+			}
+		}
+		if idx < 0 {
+			return "", fmt.Errorf("no Options= line in %s", mountPath)
+		}
+
+		var baseOpts []string
+		for _, o := range strings.Split(strings.TrimPrefix(lines[idx], "Options="), ",") {
+			if o != "" && !strings.HasPrefix(o, "vers=") {
+				baseOpts = append(baseOpts, o)
+			}
+		}
+
+		// The probe must bind the path directly, not through the autofs point.
+		clearAutomountAt(cfg.MountPoint)
+		version, err := mountWithNegotiation(cfg.Share.Path, cfg.MountPoint, baseOpts, autoDialects, "")
+		if err != nil {
+			return "", fmt.Errorf("could not negotiate an SMB dialect for %s: %w", cfg.Share.Path, err)
+		}
+		sudoRun("umount", "-l", cfg.MountPoint)
+
+		lines[idx] = "Options=" + strings.Join(append([]string{"vers=" + version}, baseOpts...), ",")
+		return strings.Join(lines, "\n"), nil
+	})
 }
 
 func systemdUnitName(mountPoint string) string {

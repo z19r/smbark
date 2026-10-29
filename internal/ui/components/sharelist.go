@@ -14,7 +14,8 @@ import (
 )
 
 type ShareItem struct {
-	Share smb.Share
+	Share   smb.Share
+	Warning string // shown under the share when non-empty
 }
 
 func (s ShareItem) Title() string {
@@ -146,6 +147,9 @@ func (d ShareListDelegate) Render(w io.Writer, m list.Model, index int, item lis
 	}
 
 	content := prefix + title + "\n" + prefix + desc
+	if si.Warning != "" {
+		content += "\n" + prefix + lipgloss.NewStyle().Foreground(t.Red).Render("⚠ "+si.Warning)
+	}
 	if usageBar != "" {
 		content += "\n" + prefix + lipgloss.NewStyle().Foreground(t.DarkForeground).Render(usageBar)
 	}
