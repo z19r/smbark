@@ -676,9 +676,19 @@ func TestCreateAutomount_BakesNegotiatedVersionAndTriggersViaAutofs(t *testing.T
 		t.Errorf(".mount unit malformed: %q", unit)
 	}
 
-	// An .automount unit was written too.
-	if _, ok := f.stdinForTee(".automount"); !ok {
-		t.Error("no .automount unit written")
+	if !strings.Contains(unit, "After=network-online.target") {
+		t.Errorf(".mount unit must wait for the network: %q", unit)
+	}
+
+	// An .automount unit was written too, without a network ordering: systemd
+	// orders automounts Before=local-fs.target, so After=network-online.target
+	// there creates a boot ordering cycle.
+	auto, ok := f.stdinForTee(".automount")
+	if !ok {
+		t.Fatal("no .automount unit written")
+	}
+	if strings.Contains(auto, "network-online.target") {
+		t.Errorf(".automount unit creates a boot ordering cycle: %q", auto)
 	}
 
 	// Lifecycle: daemon-reload, enable + start the automount.
