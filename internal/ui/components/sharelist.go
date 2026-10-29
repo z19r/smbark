@@ -58,11 +58,22 @@ func NewShareListDelegate(t *theme.Theme) ShareListDelegate {
 	return ShareListDelegate{theme: t}
 }
 
-func (d ShareListDelegate) Height() int                             { return 3 }
-func (d ShareListDelegate) Spacing() int                            { return 1 }
-func (d ShareListDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
+func (d ShareListDelegate) Height() int  { return 3 }
+func (d ShareListDelegate) Spacing() int { return 1 }
 
-func (d ShareListDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
+func (d ShareListDelegate) Update(
+	_ tea.Msg,
+	_ *list.Model,
+) tea.Cmd {
+	return nil
+}
+
+func (d ShareListDelegate) Render(
+	w io.Writer,
+	m list.Model,
+	index int,
+	item list.Item,
+) {
 	si, ok := item.(ShareItem)
 	if !ok {
 		return
@@ -131,8 +142,12 @@ func (d ShareListDelegate) Render(w io.Writer, m list.Model, index int, item lis
 			barColor = t.Yellow
 		}
 
-		bar := lipgloss.NewStyle().Foreground(barColor).Render(strings.Repeat("█", filled)) +
-			lipgloss.NewStyle().Foreground(t.Muted).Render(strings.Repeat("░", barWidth-filled))
+		bar := lipgloss.NewStyle().
+			Foreground(barColor).
+			Render(strings.Repeat("█", filled)) +
+			lipgloss.NewStyle().
+				Foreground(t.Muted).
+				Render(strings.Repeat("░", barWidth-filled))
 
 		usageBar = fmt.Sprintf("  %s %s/%s (%.0f%%)",
 			bar,
@@ -148,10 +163,14 @@ func (d ShareListDelegate) Render(w io.Writer, m list.Model, index int, item lis
 
 	content := prefix + title + "\n" + prefix + desc
 	if si.Warning != "" {
-		content += "\n" + prefix + lipgloss.NewStyle().Foreground(t.Red).Render("⚠ "+si.Warning)
+		content += "\n" + prefix + lipgloss.NewStyle().
+			Foreground(t.Red).
+			Render("⚠ "+si.Warning)
 	}
 	if usageBar != "" {
-		content += "\n" + prefix + lipgloss.NewStyle().Foreground(t.DarkForeground).Render(usageBar)
+		content += "\n" + prefix + lipgloss.NewStyle().
+			Foreground(t.DarkForeground).
+			Render(usageBar)
 	}
 
 	fmt.Fprint(w, content)
@@ -159,17 +178,53 @@ func (d ShareListDelegate) Render(w io.Writer, m list.Model, index int, item lis
 
 func ShareListKeyMap() list.KeyMap {
 	return list.KeyMap{
-		CursorUp:             key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("↑/k", "up")),
-		CursorDown:           key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("↓/j", "down")),
-		PrevPage:             key.NewBinding(key.WithKeys("pgup", "b"), key.WithHelp("pgup", "prev page")),
-		NextPage:             key.NewBinding(key.WithKeys("pgdown", "f"), key.WithHelp("pgdn", "next page")),
-		GoToStart:            key.NewBinding(key.WithKeys("home", "g"), key.WithHelp("home", "start")),
-		GoToEnd:              key.NewBinding(key.WithKeys("end", "G"), key.WithHelp("end", "end")),
-		Filter:               key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "filter")),
-		ClearFilter:          key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "clear filter")),
-		CancelWhileFiltering: key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "cancel")),
-		AcceptWhileFiltering: key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "apply filter")),
-		ShowFullHelp:         key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
-		CloseFullHelp:        key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "close help")),
+		CursorUp: key.NewBinding(
+			key.WithKeys("up", "k"),
+			key.WithHelp("↑/k", "up"),
+		),
+		CursorDown: key.NewBinding(
+			key.WithKeys("down", "j"),
+			key.WithHelp("↓/j", "down"),
+		),
+		PrevPage: key.NewBinding(
+			key.WithKeys("pgup", "b"),
+			key.WithHelp("pgup", "prev page"),
+		),
+		NextPage: key.NewBinding(
+			key.WithKeys("pgdown", "f"),
+			key.WithHelp("pgdn", "next page"),
+		),
+		GoToStart: key.NewBinding(
+			key.WithKeys("home", "g"),
+			key.WithHelp("home", "start"),
+		),
+		GoToEnd: key.NewBinding(
+			key.WithKeys("end", "G"),
+			key.WithHelp("end", "end"),
+		),
+		Filter: key.NewBinding(
+			key.WithKeys("/"),
+			key.WithHelp("/", "filter"),
+		),
+		ClearFilter: key.NewBinding(
+			key.WithKeys("esc"),
+			key.WithHelp("esc", "clear filter"),
+		),
+		CancelWhileFiltering: key.NewBinding(
+			key.WithKeys("esc"),
+			key.WithHelp("esc", "cancel"),
+		),
+		AcceptWhileFiltering: key.NewBinding(
+			key.WithKeys("enter"),
+			key.WithHelp("enter", "apply filter"),
+		),
+		ShowFullHelp: key.NewBinding(
+			key.WithKeys("?"),
+			key.WithHelp("?", "help"),
+		),
+		CloseFullHelp: key.NewBinding(
+			key.WithKeys("?"),
+			key.WithHelp("?", "close help"),
+		),
 	}
 }

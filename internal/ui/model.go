@@ -459,7 +459,10 @@ func (m *Model) handleDiscoverKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					target = host.Name
 				}
 				m.scanning = true
-				m.setStatus(fmt.Sprintf("Listing shares on %s...", target), false)
+				m.setStatus(
+					fmt.Sprintf("Listing shares on %s...", target),
+					false,
+				)
 				return m, listShares(target, smb.Credentials{})
 			}
 		}
@@ -497,10 +500,26 @@ func (m *Model) handleShareSelect() (tea.Model, tea.Cmd) {
 	m.selectedShare = &share
 
 	s := components.NewSelect("Action", []components.SelectOption{
-		{Label: "Mount Share", Description: "Mount this share now", Value: "mount"},
-		{Label: "Mount with Options", Description: "Configure mount options", Value: "mount-opts"},
-		{Label: "Setup Automount", Description: "Configure systemd automount", Value: "automount"},
-		{Label: "Check Connectivity", Description: "Test connection to host", Value: "connectivity"},
+		{
+			Label:       "Mount Share",
+			Description: "Mount this share now",
+			Value:       "mount",
+		},
+		{
+			Label:       "Mount with Options",
+			Description: "Configure mount options",
+			Value:       "mount-opts",
+		},
+		{
+			Label:       "Setup Automount",
+			Description: "Configure systemd automount",
+			Value:       "automount",
+		},
+		{
+			Label:       "Check Connectivity",
+			Description: "Test connection to host",
+			Value:       "connectivity",
+		},
 	}, min(m.width-10, 60))
 	m.selectMenu = &s
 	return m, nil
@@ -515,9 +534,15 @@ func (m *Model) handleMountedKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			idx := m.mountedList.Index()
 			if idx < len(m.mountedShares) {
 				share := m.mountedShares[idx]
-				c := components.NewConfirm("Unmount Share",
-					fmt.Sprintf("Unmount %s from %s?", share.Path, share.MountPoint),
-					min(m.width-10, 50))
+				c := components.NewConfirm(
+					"Unmount Share",
+					fmt.Sprintf(
+						"Unmount %s from %s?",
+						share.Path,
+						share.MountPoint,
+					),
+					min(m.width-10, 50),
+				)
 				m.confirm = &c
 				m.selectedShare = &share
 				m.viewState = ViewUnmountConfirm
@@ -528,9 +553,14 @@ func (m *Model) handleMountedKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			idx := m.mountedList.Index()
 			if idx < len(m.mountedShares) {
 				share := m.mountedShares[idx]
-				c := components.NewConfirm("Force Unmount",
-					fmt.Sprintf("Force unmount %s? (lazy unmount)", share.MountPoint),
-					min(m.width-10, 50))
+				c := components.NewConfirm(
+					"Force Unmount",
+					fmt.Sprintf(
+						"Force unmount %s? (lazy unmount)",
+						share.MountPoint,
+					),
+					min(m.width-10, 50),
+				)
 				c.Yes = false
 				m.confirm = &c
 				m.selectedShare = &share
@@ -550,7 +580,10 @@ func (m *Model) handleAutomountKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, loadAutomounts
 	case "f":
 		if cfg, ok := m.selectedAutomount(); ok && len(cfg.Issues) > 0 {
-			m.setStatus(fmt.Sprintf("Fixing automount for %s...", cfg.Share.Path), false)
+			m.setStatus(
+				fmt.Sprintf("Fixing automount for %s...", cfg.Share.Path),
+				false,
+			)
 			return m, fixAutomount(cfg)
 		}
 	case "d", "delete":
@@ -625,7 +658,10 @@ func (m *Model) handleDialogDone() (tea.Model, tea.Cmd) {
 				Domain:   vals["Domain"],
 			}
 			m.scanning = true
-			m.setStatus(fmt.Sprintf("Listing shares on %s...", m.selectedHost), false)
+			m.setStatus(
+				fmt.Sprintf("Listing shares on %s...", m.selectedHost),
+				false,
+			)
 			return m, listShares(m.selectedHost, creds)
 		}
 
@@ -638,7 +674,10 @@ func (m *Model) handleDialogDone() (tea.Model, tea.Cmd) {
 				Password: vals["Password"],
 			}
 			m.mounting = true
-			m.setStatus(fmt.Sprintf("Mounting %s...", m.selectedShare.Path), false)
+			m.setStatus(
+				fmt.Sprintf("Mounting %s...", m.selectedShare.Path),
+				false,
+			)
 			return m, mountShare(*m.selectedShare, opts)
 		}
 
@@ -655,7 +694,13 @@ func (m *Model) handleDialogDone() (tea.Model, tea.Cmd) {
 				MountPoint: vals["Mount Point"],
 				Options:    opts,
 			}
-			m.setStatus(fmt.Sprintf("Setting up automount for %s...", m.selectedShare.Path), false)
+			m.setStatus(
+				fmt.Sprintf(
+					"Setting up automount for %s...",
+					m.selectedShare.Path,
+				),
+				false,
+			)
 			return m, createAutomount(cfg)
 		}
 
@@ -676,7 +721,10 @@ func (m *Model) handleDialogDone() (tea.Model, tea.Cmd) {
 				},
 			}
 			m.mounting = true
-			m.setStatus(fmt.Sprintf("Mounting %s...", m.selectedShare.Path), false)
+			m.setStatus(
+				fmt.Sprintf("Mounting %s...", m.selectedShare.Path),
+				false,
+			)
 			return m, mountShare(*m.selectedShare, opts)
 		}
 	}
@@ -734,39 +782,63 @@ func (m *Model) handleSelectDone() (tea.Model, tea.Cmd) {
 	switch s.Selected().Value {
 	case "mount":
 		defaultMP := fmt.Sprintf("/mnt/smb/%s/%s", share.Host, share.Name)
-		d := components.NewDialog("Mount Share: "+share.Path, []components.DialogField{
-			{Label: "Mount Point", Placeholder: defaultMP, Value: defaultMP},
-			{Label: "Username", Placeholder: "guest (leave empty)"},
-			{Label: "Password", Password: true},
-		}, min(m.width-10, 60))
+		d := components.NewDialog(
+			"Mount Share: "+share.Path,
+			[]components.DialogField{
+				{
+					Label:       "Mount Point",
+					Placeholder: defaultMP,
+					Value:       defaultMP,
+				},
+				{Label: "Username", Placeholder: "guest (leave empty)"},
+				{Label: "Password", Password: true},
+			},
+			min(m.width-10, 60),
+		)
 		m.dialog = &d
 		m.viewState = ViewMountDialog
 
 	case "mount-opts":
 		defaultMP := fmt.Sprintf("/mnt/smb/%s/%s", share.Host, share.Name)
 		defaults := smb.DefaultMountOptions()
-		d := components.NewDialog("Mount Options: "+share.Path, []components.DialogField{
-			{Label: "Mount Point", Value: defaultMP},
-			{Label: "SMB Version", Value: defaults.Version, Placeholder: "auto, 3.0, 2.1, 1.0"},
-			{Label: "Security", Value: defaults.Security, Placeholder: "ntlmssp, krb5"},
-			{Label: "UID", Value: defaults.UID},
-			{Label: "GID", Value: defaults.GID},
-			{Label: "File Mode", Value: defaults.FileMode},
-			{Label: "Dir Mode", Value: defaults.DirMode},
-			{Label: "Username", Placeholder: "guest (leave empty)"},
-			{Label: "Password", Password: true},
-			{Label: "Domain", Placeholder: "WORKGROUP"},
-		}, min(m.width-10, 65))
+		d := components.NewDialog(
+			"Mount Options: "+share.Path,
+			[]components.DialogField{
+				{Label: "Mount Point", Value: defaultMP},
+				{
+					Label:       "SMB Version",
+					Value:       defaults.Version,
+					Placeholder: "auto, 3.0, 2.1, 1.0",
+				},
+				{
+					Label:       "Security",
+					Value:       defaults.Security,
+					Placeholder: "ntlmssp, krb5",
+				},
+				{Label: "UID", Value: defaults.UID},
+				{Label: "GID", Value: defaults.GID},
+				{Label: "File Mode", Value: defaults.FileMode},
+				{Label: "Dir Mode", Value: defaults.DirMode},
+				{Label: "Username", Placeholder: "guest (leave empty)"},
+				{Label: "Password", Password: true},
+				{Label: "Domain", Placeholder: "WORKGROUP"},
+			},
+			min(m.width-10, 65),
+		)
 		m.dialog = &d
 		m.viewState = ViewMountOptions
 
 	case "automount":
 		defaultMP := fmt.Sprintf("/mnt/smb/%s/%s", share.Host, share.Name)
-		d := components.NewDialog("Setup Automount: "+share.Path, []components.DialogField{
-			{Label: "Mount Point", Value: defaultMP},
-			{Label: "Username", Placeholder: "guest (leave empty)"},
-			{Label: "Password", Password: true},
-		}, min(m.width-10, 60))
+		d := components.NewDialog(
+			"Setup Automount: "+share.Path,
+			[]components.DialogField{
+				{Label: "Mount Point", Value: defaultMP},
+				{Label: "Username", Placeholder: "guest (leave empty)"},
+				{Label: "Password", Password: true},
+			},
+			min(m.width-10, 60),
+		)
 		m.dialog = &d
 		m.viewState = ViewAutomountDialog
 
@@ -798,9 +870,17 @@ func (m *Model) rebuildLists() {
 				status = fmt.Sprintf(" ✓ %dms", cs.Latency.Milliseconds())
 			}
 		}
-		hostItems = append(hostItems, simpleItem{title: "🖥  " + label + status, desc: h.Workgroup})
+		hostItems = append(
+			hostItems,
+			simpleItem{title: "🖥  " + label + status, desc: h.Workgroup},
+		)
 	}
-	m.hostList = list.New(hostItems, list.NewDefaultDelegate(), contentWidth, contentHeight)
+	m.hostList = list.New(
+		hostItems,
+		list.NewDefaultDelegate(),
+		contentWidth,
+		contentHeight,
+	)
 	m.hostList.Title = ""
 	m.hostList.SetShowTitle(false)
 	m.hostList.SetShowStatusBar(false)
@@ -817,7 +897,12 @@ func (m *Model) rebuildLists() {
 			shareItems = append(shareItems, components.ShareItem{Share: s})
 		}
 		delegate := components.NewShareListDelegate(t)
-		m.shareList = list.New(shareItems, delegate, contentWidth, contentHeight)
+		m.shareList = list.New(
+			shareItems,
+			delegate,
+			contentWidth,
+			contentHeight,
+		)
 		m.shareList.Title = ""
 		m.shareList.SetShowTitle(false)
 		m.shareList.SetShowStatusBar(false)
@@ -847,7 +932,12 @@ func (m *Model) rebuildLists() {
 		mountedItems = append(mountedItems, components.ShareItem{Share: s})
 	}
 	delegate := components.NewShareListDelegate(t)
-	m.mountedList = list.New(mountedItems, delegate, contentWidth, contentHeight)
+	m.mountedList = list.New(
+		mountedItems,
+		delegate,
+		contentWidth,
+		contentHeight,
+	)
 	m.mountedList.Title = ""
 	m.mountedList.SetShowTitle(false)
 	m.mountedList.SetShowStatusBar(false)
@@ -868,7 +958,12 @@ func (m *Model) rebuildLists() {
 		}
 		automountItems = append(automountItems, item)
 	}
-	m.automountList = list.New(automountItems, delegate, contentWidth, contentHeight)
+	m.automountList = list.New(
+		automountItems,
+		delegate,
+		contentWidth,
+		contentHeight,
+	)
 	m.automountList.Title = ""
 	m.automountList.SetShowTitle(false)
 	m.automountList.SetShowStatusBar(false)
@@ -955,7 +1050,10 @@ func (m Model) renderDiscoverView() string {
 	contentHeight := max(m.height-18, 5)
 
 	if m.viewState == ViewHostShares && m.selectedHost != "" {
-		breadcrumb := components.RenderBreadcrumb([]string{"Discover", m.selectedHost}, t)
+		breadcrumb := components.RenderBreadcrumb(
+			[]string{"Discover", m.selectedHost},
+			t,
+		)
 
 		shares := m.hostShares[m.selectedHost]
 		if len(shares) == 0 {
@@ -984,7 +1082,9 @@ func (m Model) renderDiscoverView() string {
 
 	if m.scanning {
 		spinnerView := m.spinner.View()
-		scanMsg := lipgloss.NewStyle().Foreground(t.Accent).Render(" Scanning network...")
+		scanMsg := lipgloss.NewStyle().
+			Foreground(t.Accent).
+			Render(" Scanning network...")
 		scanBar := theme.GradientBar(min(m.width-8, 40), t)
 		networkAnim := components.NetworkAnimation(m.frame, min(m.width-10, 50))
 
@@ -1010,10 +1110,17 @@ func (m Model) renderDiscoverView() string {
 
 		networkAnim := components.NetworkAnimation(m.frame, min(m.width-10, 50))
 		welcomeBox := components.BoxWithGlow(
-			lipgloss.JoinVertical(lipgloss.Center,
+			lipgloss.JoinVertical(
+				lipgloss.Center,
 				components.WaveText("Welcome to SMBark", m.frame, t),
 				"",
-				emptyStyle.Render("Press ")+accent.Render("s")+emptyStyle.Render(" to scan the network"),
+				emptyStyle.Render(
+					"Press ",
+				)+accent.Render(
+					"s",
+				)+emptyStyle.Render(
+					" to scan the network",
+				),
 				emptyStyle.Render("for SMB/CIFS shares"),
 			),
 			min(m.width-6, 50), m.frame, t)
@@ -1060,7 +1167,11 @@ func (m Model) renderMountedView() string {
 			emptyBox)
 	}
 
-	title := t.Gradient(fmt.Sprintf("  %d Mounted Share(s)", len(m.mountedShares)), t.Green, t.Cyan)
+	title := t.Gradient(
+		fmt.Sprintf("  %d Mounted Share(s)", len(m.mountedShares)),
+		t.Green,
+		t.Cyan,
+	)
 	hint := lipgloss.NewStyle().
 		Foreground(t.DarkForeground).
 		Render("  u:unmount  f:force unmount  r:refresh")
@@ -1096,7 +1207,11 @@ func (m Model) renderAutomountView() string {
 			emptyBox)
 	}
 
-	title := t.Gradient(fmt.Sprintf("  %d Automount(s)", len(m.automounts)), t.Yellow, t.Orange)
+	title := t.Gradient(
+		fmt.Sprintf("  %d Automount(s)", len(m.automounts)),
+		t.Yellow,
+		t.Orange,
+	)
 	keys := "  d:remove  r:refresh"
 	if cfg, ok := m.selectedAutomount(); ok && len(cfg.Issues) > 0 {
 		keys += "  f:fix"
@@ -1130,25 +1245,59 @@ func (m Model) renderConfigView() string {
 	automountCount := len(m.automounts)
 	fstabCount := len(m.fstabEntries)
 
-	mountedBar := components.MiniProgressBar(float64(mountedCount)/max(float64(mountedCount+automountCount), 1), 15, t)
-	automountBar := components.MiniProgressBar(float64(automountCount)/max(float64(mountedCount+automountCount), 1), 15, t)
+	mountedBar := components.MiniProgressBar(
+		float64(mountedCount)/max(float64(mountedCount+automountCount), 1),
+		15,
+		t,
+	)
+	automountBar := components.MiniProgressBar(
+		float64(automountCount)/max(float64(mountedCount+automountCount), 1),
+		15,
+		t,
+	)
 
-	overview := lipgloss.JoinVertical(lipgloss.Left,
+	overview := lipgloss.JoinVertical(
+		lipgloss.Left,
 		components.WaveText("System Overview", m.frame, t),
 		"",
-		labelStyle.Render("Mounted Shares:")+valueStyle.Render(fmt.Sprintf(" %d ", mountedCount))+mountedBar,
-		labelStyle.Render("Automounts:")+valueStyle.Render(fmt.Sprintf(" %d ", automountCount))+automountBar,
-		labelStyle.Render("Fstab Entries:")+valueStyle.Render(fmt.Sprintf("%d", fstabCount)),
-		labelStyle.Render("Discovered Hosts:")+valueStyle.Render(fmt.Sprintf("%d", len(m.hosts))),
+		labelStyle.Render(
+			"Mounted Shares:",
+		)+valueStyle.Render(
+			fmt.Sprintf(" %d ", mountedCount),
+		)+mountedBar,
+		labelStyle.Render(
+			"Automounts:",
+		)+valueStyle.Render(
+			fmt.Sprintf(" %d ", automountCount),
+		)+automountBar,
+		labelStyle.Render(
+			"Fstab Entries:",
+		)+valueStyle.Render(
+			fmt.Sprintf("%d", fstabCount),
+		),
+		labelStyle.Render(
+			"Discovered Hosts:",
+		)+valueStyle.Render(
+			fmt.Sprintf("%d", len(m.hosts)),
+		),
 	)
 
 	var fstabLines []string
 	for _, s := range m.fstabEntries {
 		line := fmt.Sprintf("  %s → %s", s.Path, s.MountPoint)
-		fstabLines = append(fstabLines, lipgloss.NewStyle().Foreground(t.Foreground).Render(line))
+		fstabLines = append(
+			fstabLines,
+			lipgloss.NewStyle().Foreground(t.Foreground).Render(line),
+		)
 	}
 	if len(fstabLines) == 0 {
-		fstabLines = append(fstabLines, lipgloss.NewStyle().Foreground(t.DarkForeground).Italic(true).Render("  No CIFS entries in /etc/fstab"))
+		fstabLines = append(
+			fstabLines,
+			lipgloss.NewStyle().
+				Foreground(t.DarkForeground).
+				Italic(true).
+				Render("  No CIFS entries in /etc/fstab"),
+		)
 	}
 
 	_ = titleStyle
@@ -1183,7 +1332,13 @@ func (m Model) renderConfigView() string {
 		connLines = append(connLines, line)
 	}
 	if len(connLines) == 0 {
-		connLines = append(connLines, lipgloss.NewStyle().Foreground(t.DarkForeground).Italic(true).Render("  No connectivity checks performed"))
+		connLines = append(
+			connLines,
+			lipgloss.NewStyle().
+				Foreground(t.DarkForeground).
+				Italic(true).
+				Render("  No connectivity checks performed"),
+		)
 	}
 
 	conn := lipgloss.JoinVertical(lipgloss.Left,
@@ -1218,13 +1373,16 @@ func (m Model) renderHelpView() string {
 
 	title := theme.SparkleText("Help & Keybindings", t)
 
-	content := lipgloss.JoinVertical(lipgloss.Left,
+	content := lipgloss.JoinVertical(
+		lipgloss.Left,
 		"",
 		lipgloss.NewStyle().Padding(0, 2).Render(title),
 		"",
 		m.helpViewport.View(),
 		"",
-		lipgloss.NewStyle().Foreground(t.DarkForeground).Render("  ?:close help  ↑↓:scroll"),
+		lipgloss.NewStyle().
+			Foreground(t.DarkForeground).
+			Render("  ?:close help  ↑↓:scroll"),
 	)
 	return content
 }
@@ -1288,8 +1446,18 @@ func renderHelpContent(t *theme.Theme) string {
 
 	lines = append(lines, h.Render("  About"))
 	lines = append(lines, "")
-	lines = append(lines, d.Render("  SMBark v"+Version+" — A beautiful TUI for managing SMB shares"))
-	lines = append(lines, d.Render("  Built with Charm libraries (Bubble Tea, Lip Gloss, Bubbles)"))
+	lines = append(
+		lines,
+		d.Render(
+			"  SMBark v"+Version+" — A beautiful TUI for managing SMB shares",
+		),
+	)
+	lines = append(
+		lines,
+		d.Render(
+			"  Built with Charm libraries (Bubble Tea, Lip Gloss, Bubbles)",
+		),
+	)
 	lines = append(lines, d.Render("  Omarchy theme support included"))
 
 	return strings.Join(lines, "\n")

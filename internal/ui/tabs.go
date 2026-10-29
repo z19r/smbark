@@ -53,12 +53,23 @@ func RenderTabs(activeIdx int, width int, frame float64) string {
 
 	tabBar := lipgloss.JoinHorizontal(lipgloss.Top, renderedTabs...)
 
-	underline := renderTabUnderline(activeIdx, len(Tabs), tabWidth, width, t, frame)
+	underline := renderTabUnderline(
+		activeIdx,
+		len(Tabs),
+		tabWidth,
+		width,
+		t,
+		frame,
+	)
 
 	return lipgloss.JoinVertical(lipgloss.Left, tabBar, underline)
 }
 
-func renderTabUnderline(activeIdx, totalTabs, tabWidth, totalWidth int, t *theme.Theme, frame float64) string {
+func renderTabUnderline(
+	activeIdx, totalTabs, tabWidth, totalWidth int,
+	t *theme.Theme,
+	frame float64,
+) string {
 	var sb strings.Builder
 	for i := range totalWidth {
 		tabIdx := i / max(tabWidth, 1)
@@ -66,9 +77,14 @@ func renderTabUnderline(activeIdx, totalTabs, tabWidth, totalWidth int, t *theme
 			tabIdx = totalTabs - 1
 		}
 		if tabIdx == activeIdx {
-			pos := math.Mod(float64(i)/float64(max(totalWidth, 1))+frame*0.02, 1.0)
+			pos := math.Mod(
+				float64(i)/float64(max(totalWidth, 1))+frame*0.02,
+				1.0,
+			)
 			c := t.RainbowColor(pos)
-			sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(c)).Render("▀"))
+			sb.WriteString(
+				lipgloss.NewStyle().Foreground(lipgloss.Color(c)).Render("▀"),
+			)
 		} else {
 			sb.WriteString(lipgloss.NewStyle().Foreground(t.Selection).Render("─"))
 		}

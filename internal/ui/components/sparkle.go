@@ -18,9 +18,15 @@ func AnimatedDivider(width int, frame float64) string {
 		pos := math.Mod(float64(i)/float64(max(width-1, 1))+frame*0.015, 1.0)
 		c := t.RainbowColor(pos)
 
-		charIdx := int(math.Mod(float64(i)+frame*0.5, float64(len(sparkleChars))))
+		charIdx := int(
+			math.Mod(float64(i)+frame*0.5, float64(len(sparkleChars))),
+		)
 		if i%3 == 0 {
-			sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(c)).Render(sparkleChars[charIdx]))
+			sb.WriteString(
+				lipgloss.NewStyle().
+					Foreground(lipgloss.Color(c)).
+					Render(sparkleChars[charIdx]),
+			)
 		} else {
 			sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(c)).Render("─"))
 		}
@@ -47,7 +53,9 @@ func WaveText(text string, frame float64, t *theme.Theme) string {
 		wave := math.Sin(float64(i)*0.5 + frame*0.15)
 		pos := math.Mod((wave+1)/2, 1.0)
 		c := t.RainbowColor(pos)
-		sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(c)).Render(string(r)))
+		sb.WriteString(
+			lipgloss.NewStyle().Foreground(lipgloss.Color(c)).Render(string(r)),
+		)
 	}
 	return sb.String()
 }
@@ -64,11 +72,25 @@ func NetworkAnimation(frame float64, width int) string {
 		if i > 0 {
 			connWidth := spacing - 3
 			for j := range connWidth {
-				pos := math.Mod(float64(j)/float64(max(connWidth-1, 1))+frame*0.03+float64(i)*0.1, 1.0)
+				pos := math.Mod(
+					float64(
+						j,
+					)/float64(
+						max(connWidth-1, 1),
+					)+frame*0.03+float64(
+						i,
+					)*0.1,
+					1.0,
+				)
 				pulse := (math.Sin(float64(j)*0.3+frame*0.2) + 1) / 2
 				if pulse > 0.6 {
 					c := t.RainbowColor(pos)
-					sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(c)).Bold(true).Render(connChar))
+					sb.WriteString(
+						lipgloss.NewStyle().
+							Foreground(lipgloss.Color(c)).
+							Bold(true).
+							Render(connChar),
+					)
 				} else {
 					sb.WriteString(lipgloss.NewStyle().Foreground(t.Selection).Render("─"))
 				}
@@ -94,7 +116,9 @@ func MiniProgressBar(percent float64, width int, t *theme.Theme) string {
 		pos := float64(i) / float64(max(width-1, 1))
 		if i < filled {
 			c := t.RainbowColor(pos)
-			sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(c)).Render("█"))
+			sb.WriteString(
+				lipgloss.NewStyle().Foreground(lipgloss.Color(c)).Render("█"),
+			)
 		} else {
 			sb.WriteString(lipgloss.NewStyle().Foreground(t.Selection).Render("░"))
 		}
@@ -103,7 +127,12 @@ func MiniProgressBar(percent float64, width int, t *theme.Theme) string {
 	return sb.String()
 }
 
-func BoxWithGlow(content string, width int, frame float64, t *theme.Theme) string {
+func BoxWithGlow(
+	content string,
+	width int,
+	frame float64,
+	t *theme.Theme,
+) string {
 	lines := strings.Split(content, "\n")
 	maxLen := 0
 	for _, l := range lines {
@@ -125,13 +154,21 @@ func BoxWithGlow(content string, width int, frame float64, t *theme.Theme) strin
 
 	topPos := math.Mod(frame*0.02, 1.0)
 	topC := t.RainbowColor(topPos)
-	sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(topC)).Render(topLeft))
+	sb.WriteString(
+		lipgloss.NewStyle().Foreground(lipgloss.Color(topC)).Render(topLeft),
+	)
 	for i := range boxWidth - 2 {
 		pos := math.Mod(float64(i)/float64(max(boxWidth-3, 1))+frame*0.02, 1.0)
 		c := t.RainbowColor(pos)
-		sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(c)).Render(horizontal))
+		sb.WriteString(
+			lipgloss.NewStyle().
+				Foreground(lipgloss.Color(c)).
+				Render(horizontal),
+		)
 	}
-	sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(topC)).Render(topRight))
+	sb.WriteString(
+		lipgloss.NewStyle().Foreground(lipgloss.Color(topC)).Render(topRight),
+	)
 	sb.WriteString("\n")
 
 	for _, line := range lines {
@@ -141,21 +178,38 @@ func BoxWithGlow(content string, width int, frame float64, t *theme.Theme) strin
 		rc := t.RainbowColor(rightPos)
 
 		padding := max(boxWidth-2-lipgloss.Width(line), 0)
-		sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(lc)).Render(vertical))
+		sb.WriteString(
+			lipgloss.NewStyle().Foreground(lipgloss.Color(lc)).Render(vertical),
+		)
 		sb.WriteString(" " + line + strings.Repeat(" ", padding-1))
-		sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(rc)).Render(vertical))
+		sb.WriteString(
+			lipgloss.NewStyle().Foreground(lipgloss.Color(rc)).Render(vertical),
+		)
 		sb.WriteString("\n")
 	}
 
 	botPos := math.Mod(frame*0.02+0.5, 1.0)
 	botC := t.RainbowColor(botPos)
-	sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(botC)).Render(bottomLeft))
+	sb.WriteString(
+		lipgloss.NewStyle().Foreground(lipgloss.Color(botC)).Render(bottomLeft),
+	)
 	for i := range boxWidth - 2 {
-		pos := math.Mod(float64(i)/float64(max(boxWidth-3, 1))+frame*0.02+0.5, 1.0)
+		pos := math.Mod(
+			float64(i)/float64(max(boxWidth-3, 1))+frame*0.02+0.5,
+			1.0,
+		)
 		c := t.RainbowColor(pos)
-		sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(c)).Render(horizontal))
+		sb.WriteString(
+			lipgloss.NewStyle().
+				Foreground(lipgloss.Color(c)).
+				Render(horizontal),
+		)
 	}
-	sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(botC)).Render(bottomRight))
+	sb.WriteString(
+		lipgloss.NewStyle().
+			Foreground(lipgloss.Color(botC)).
+			Render(bottomRight),
+	)
 
 	return sb.String()
 }

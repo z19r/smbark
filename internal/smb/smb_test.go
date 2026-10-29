@@ -26,7 +26,12 @@ type fakeSys struct {
 	respond func(name string, args []string, stdin string) (string, error)
 }
 
-func (f *fakeSys) exec(_ context.Context, env []string, stdin, name string, args ...string) (string, error) {
+func (f *fakeSys) exec(
+	_ context.Context,
+	env []string,
+	stdin, name string,
+	args ...string,
+) (string, error) {
 	f.calls = append(f.calls, recordedCall{
 		name:  name,
 		args:  append([]string(nil), args...),
@@ -71,7 +76,8 @@ func (f *fakeSys) contains(sub string) bool { return f.index(sub) >= 0 }
 // with the given suffix (i.e. the content written to a unit/cred file).
 func (f *fakeSys) stdinForTee(pathSuffix string) (string, bool) {
 	for _, c := range f.calls {
-		if c.name == "sudo" && len(c.args) >= 3 && c.args[1] == "tee" && strings.HasSuffix(c.args[2], pathSuffix) {
+		if c.name == "sudo" && len(c.args) >= 3 && c.args[1] == "tee" &&
+			strings.HasSuffix(c.args[2], pathSuffix) {
 			return c.stdin, true
 		}
 	}
@@ -101,8 +107,10 @@ func (f *fakeSys) mountAttempts() []string {
 // optStringFor returns the -o option string of the mount attempt at vers=v.
 func (f *fakeSys) optStringFor(v string) string {
 	for _, c := range f.calls {
-		if c.name == "sudo" && len(c.args) >= 8 && c.args[1] == "mount" && c.args[6] == "-o" &&
-			strings.Contains(c.args[7], "vers="+v+",") || (c.name == "sudo" && len(c.args) >= 8 && c.args[1] == "mount" && c.args[7] == "vers="+v) {
+		if c.name == "sudo" && len(c.args) >= 8 && c.args[1] == "mount" &&
+			c.args[6] == "-o" &&
+			strings.Contains(c.args[7], "vers="+v+",") ||
+			(c.name == "sudo" && len(c.args) >= 8 && c.args[1] == "mount" && c.args[7] == "vers="+v) {
 			return c.args[7]
 		}
 	}
@@ -111,13 +119,18 @@ func (f *fakeSys) optStringFor(v string) string {
 
 // mountResponder returns a respond func that fails every mount attempt except
 // vers=okVersion (which succeeds); non-mount commands succeed silently.
-func mountResponder(okVersion string) func(name string, args []string, stdin string) (string, error) {
+func mountResponder(
+	okVersion string,
+) func(name string, args []string, stdin string) (string, error) {
 	return func(name string, args []string, _ string) (string, error) {
-		if name == "sudo" && len(args) >= 8 && args[1] == "mount" && args[6] == "-o" {
+		if name == "sudo" && len(args) >= 8 && args[1] == "mount" &&
+			args[6] == "-o" {
 			if strings.Contains(args[7], "vers="+okVersion) {
 				return "", nil
 			}
-			return "mount error(22): Invalid argument", fmt.Errorf("exit status 32")
+			return "mount error(22): Invalid argument", fmt.Errorf(
+				"exit status 32",
+			)
 		}
 		return "", nil
 	}
@@ -194,7 +207,14 @@ func TestSplitUNCPath(t *testing.T) {
 	for _, c := range cases {
 		h, n := splitUNCPath(c.in)
 		if h != c.host || n != c.name {
-			t.Errorf("splitUNCPath(%q) = (%q,%q), want (%q,%q)", c.in, h, n, c.host, c.name)
+			t.Errorf(
+				"splitUNCPath(%q) = (%q,%q), want (%q,%q)",
+				c.in,
+				h,
+				n,
+				c.host,
+				c.name,
+			)
 		}
 	}
 }
@@ -225,24 +245,28 @@ func TestFormatSize(t *testing.T) {
 
 func TestUnitNameForPath(t *testing.T) {
 	// systemd-escape available: use its output.
-	f := &fakeSys{respond: func(name string, args []string, _ string) (string, error) {
-		if name == "systemd-escape" {
-			return "mnt-smb-10.0.1.97-junkdrawer\n", nil
-		}
-		return "", nil
-	}}
+	f := &fakeSys{
+		respond: func(name string, args []string, _ string) (string, error) {
+			if name == "systemd-escape" {
+				return "mnt-smb-10.0.1.97-junkdrawer\n", nil
+			}
+			return "", nil
+		},
+	}
 	defer f.install()()
 	if got := unitNameForPath("/mnt/smb/10.0.1.97/junkdrawer"); got != "mnt-smb-10.0.1.97-junkdrawer" {
 		t.Errorf("with systemd-escape: got %q", got)
 	}
 
 	// systemd-escape failing: fall back to manual escape.
-	f2 := &fakeSys{respond: func(name string, args []string, _ string) (string, error) {
-		if name == "systemd-escape" {
-			return "", fmt.Errorf("not found")
-		}
-		return "", nil
-	}}
+	f2 := &fakeSys{
+		respond: func(name string, args []string, _ string) (string, error) {
+			if name == "systemd-escape" {
+				return "", fmt.Errorf("not found")
+			}
+			return "", nil
+		},
+	}
 	defer f2.install()()
 	if got := unitNameForPath("/mnt/smb/h/s"); got != "mnt-smb-h-s" {
 		t.Errorf("fallback: got %q", got)
@@ -335,17 +359,18 @@ tmpfs /tmp tmpfs rw 0 0
 }
 
 func TestParseFstab(t *testing.T) {
-	data := `# a comment
-UUID=xxx / ext4 defaults 0 1
-//10.0.1.97/junkdrawer /mnt/smb/10.0.1.97/junkdrawer cifs credentials=/x,vers=2.0 0 0
-
-//10.0.1.97/moviebox /mnt/mb smb3 guest 0 0
-`
+	data := "# a comment\n" +
+		"UUID=xxx / ext4 defaults 0 1\n" +
+		"//10.0.1.97/junkdrawer /mnt/smb/10.0.1.97/junkdrawer cifs " +
+		"credentials=/x,vers=2.0 0 0\n" +
+		"\n" +
+		"//10.0.1.97/moviebox /mnt/mb smb3 guest 0 0\n"
 	shares := parseFstab(data)
 	if len(shares) != 2 {
 		t.Fatalf("got %d, want 2: %+v", len(shares), shares)
 	}
-	if shares[0].Name != "junkdrawer" || shares[0].MountPoint != "/mnt/smb/10.0.1.97/junkdrawer" {
+	if shares[0].Name != "junkdrawer" ||
+		shares[0].MountPoint != "/mnt/smb/10.0.1.97/junkdrawer" {
 		t.Errorf("share0 = %+v", shares[0])
 	}
 }
@@ -433,14 +458,23 @@ func TestMountWithNegotiation_LaddersToWorkingDialect(t *testing.T) {
 	f := &fakeSys{respond: mountResponder("2.0")}
 	defer f.install()()
 
-	v, err := mountWithNegotiation("//h/s", "/mnt/x", []string{"guest", "sec=none"}, autoDialects, "")
+	v, err := mountWithNegotiation(
+		"//h/s",
+		"/mnt/x",
+		[]string{"guest", "sec=none"},
+		autoDialects,
+		"",
+	)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if v != "2.0" {
 		t.Errorf("negotiated %q, want 2.0", v)
 	}
-	if got := f.mountAttempts(); !reflect.DeepEqual(got, []string{"3.1.1", "3.0", "2.1", "2.0"}) {
+	if got := f.mountAttempts(); !reflect.DeepEqual(
+		got,
+		[]string{"3.1.1", "3.0", "2.1", "2.0"},
+	) {
 		t.Errorf("attempts = %v, want full ladder in order", got)
 	}
 }
@@ -461,12 +495,16 @@ func TestMountWithNegotiation_StopsAtFirstSuccess(t *testing.T) {
 func TestMountWithNegotiation_AbortsOnNonDialectError(t *testing.T) {
 	// A credential/ENODEV-style error is NOT error(22): negotiation must stop
 	// immediately rather than mask it by trying lower dialects.
-	f := &fakeSys{respond: func(name string, args []string, _ string) (string, error) {
-		if name == "sudo" && len(args) >= 2 && args[1] == "mount" {
-			return "mount error(13): Permission denied", fmt.Errorf("exit status 32")
-		}
-		return "", nil
-	}}
+	f := &fakeSys{
+		respond: func(name string, args []string, _ string) (string, error) {
+			if name == "sudo" && len(args) >= 2 && args[1] == "mount" {
+				return "mount error(13): Permission denied", fmt.Errorf(
+					"exit status 32",
+				)
+			}
+			return "", nil
+		},
+	}
 	defer f.install()()
 
 	_, err := mountWithNegotiation("//h/s", "/mnt/x", nil, autoDialects, "")
@@ -474,18 +512,24 @@ func TestMountWithNegotiation_AbortsOnNonDialectError(t *testing.T) {
 		t.Fatal("expected error")
 	}
 	if got := f.mountAttempts(); len(got) != 1 {
-		t.Errorf("attempts = %v, want exactly 1 (no laddering past a non-dialect error)", got)
+		t.Errorf(
+			"attempts = %v, want exactly 1 (no laddering past a non-dialect error)",
+			got,
+		)
 	}
 }
 
 func TestMountWithNegotiation_PasswordRequired(t *testing.T) {
-	f := &fakeSys{respond: func(name string, args []string, _ string) (string, error) {
-		return "sudo: a password is required", fmt.Errorf("exit status 1")
-	}}
+	f := &fakeSys{
+		respond: func(name string, args []string, _ string) (string, error) {
+			return "sudo: a password is required", fmt.Errorf("exit status 1")
+		},
+	}
 	defer f.install()()
 
 	_, err := mountWithNegotiation("//h/s", "/mnt/x", nil, autoDialects, "")
-	if err == nil || !strings.Contains(err.Error(), "sudo requires a password") {
+	if err == nil ||
+		!strings.Contains(err.Error(), "sudo requires a password") {
 		t.Fatalf("err = %v, want sudo-password message", err)
 	}
 }
@@ -503,12 +547,14 @@ func TestMountWithNegotiation_AllFail(t *testing.T) {
 // --- clearAutomountAt -------------------------------------------------------
 
 func TestClearAutomountAt(t *testing.T) {
-	f := &fakeSys{respond: func(name string, args []string, _ string) (string, error) {
-		if name == "systemd-escape" {
-			return "mnt-smb-h-s", nil
-		}
-		return "", nil
-	}}
+	f := &fakeSys{
+		respond: func(name string, args []string, _ string) (string, error) {
+			if name == "systemd-escape" {
+				return "mnt-smb-h-s", nil
+			}
+			return "", nil
+		},
+	}
 	defer f.install()()
 
 	clearAutomountAt("/mnt/smb/h/s")
@@ -520,7 +566,12 @@ func TestClearAutomountAt(t *testing.T) {
 		t.Fatalf("missing a teardown command: %v", f.lines())
 	}
 	if !(iAuto < iMount && iMount < iUmount) {
-		t.Errorf("teardown order wrong: automount=%d mount=%d umount=%d", iAuto, iMount, iUmount)
+		t.Errorf(
+			"teardown order wrong: automount=%d mount=%d umount=%d",
+			iAuto,
+			iMount,
+			iUmount,
+		)
 	}
 }
 
@@ -549,14 +600,23 @@ func TestMountShare_GuestClearsAutofsThenMounts(t *testing.T) {
 	iMkdir := f.index("mkdir -p /mnt/smb/h/s")
 	iMount := f.index("mount -t cifs //h/s")
 	if !(iClear >= 0 && iClear < iMkdir && iMkdir < iMount) {
-		t.Fatalf("order wrong (clear=%d mkdir=%d mount=%d): %v", iClear, iMkdir, iMount, f.lines())
+		t.Fatalf(
+			"order wrong (clear=%d mkdir=%d mount=%d): %v",
+			iClear,
+			iMkdir,
+			iMount,
+			f.lines(),
+		)
 	}
 	// Guest options present, negotiation reached 2.0.
 	opt := f.optStringFor("2.0")
 	if !strings.Contains(opt, "guest") || !strings.Contains(opt, "sec=none") {
 		t.Errorf("guest opts missing: %q", opt)
 	}
-	if !reflect.DeepEqual(f.mountAttempts(), []string{"3.1.1", "3.0", "2.1", "2.0"}) {
+	if !reflect.DeepEqual(
+		f.mountAttempts(),
+		[]string{"3.1.1", "3.0", "2.1", "2.0"},
+	) {
 		t.Errorf("attempts = %v", f.mountAttempts())
 	}
 }
@@ -580,7 +640,15 @@ func TestMountShare_CredsPassPasswordViaEnv(t *testing.T) {
 		if n == "sudo" && len(a) >= 2 && a[1] == "mount" {
 			mountEnv = env
 		}
-		f.calls = append(f.calls, recordedCall{name: n, args: append([]string(nil), a...), stdin: stdin, env: env})
+		f.calls = append(
+			f.calls,
+			recordedCall{
+				name:  n,
+				args:  append([]string(nil), a...),
+				stdin: stdin,
+				env:   env,
+			},
+		)
 		return f.respond(n, a, stdin)
 	}
 	defer func() { sysExec = prev }()
@@ -594,7 +662,8 @@ func TestMountShare_CredsPassPasswordViaEnv(t *testing.T) {
 		t.Fatalf("MountShare error: %v", err)
 	}
 	opt := f.optStringFor("3.1.1")
-	if !strings.Contains(opt, "username=zrk") || !strings.Contains(opt, "sec=ntlmssp") {
+	if !strings.Contains(opt, "username=zrk") ||
+		!strings.Contains(opt, "sec=ntlmssp") {
 		t.Errorf("cred opts missing: %q", opt)
 	}
 	if strings.Contains(opt, "guest") {
@@ -612,19 +681,25 @@ func TestMountShare_CredsPassPasswordViaEnv(t *testing.T) {
 }
 
 func TestMountShare_MkdirFailureSurfaced(t *testing.T) {
-	f := &fakeSys{respond: func(name string, args []string, _ string) (string, error) {
-		if name == "systemd-escape" {
-			return "mnt-smb-h-s", nil
-		}
-		if name == "sudo" && len(args) >= 2 && args[1] == "mkdir" {
-			return "mkdir: permission denied", fmt.Errorf("exit status 1")
-		}
-		return "", nil
-	}}
+	f := &fakeSys{
+		respond: func(name string, args []string, _ string) (string, error) {
+			if name == "systemd-escape" {
+				return "mnt-smb-h-s", nil
+			}
+			if name == "sudo" && len(args) >= 2 && args[1] == "mkdir" {
+				return "mkdir: permission denied", fmt.Errorf("exit status 1")
+			}
+			return "", nil
+		},
+	}
 	defer f.install()()
 
-	err := MountShare(Share{Path: "//h/s"}, MountOptions{MountPoint: "/mnt/smb/h/s"})
-	if err == nil || !strings.Contains(err.Error(), "failed to create mount point") {
+	err := MountShare(
+		Share{Path: "//h/s"},
+		MountOptions{MountPoint: "/mnt/smb/h/s"},
+	)
+	if err == nil ||
+		!strings.Contains(err.Error(), "failed to create mount point") {
 		t.Fatalf("err = %v, want mkdir failure", err)
 	}
 	if f.contains("mount -t cifs") {
@@ -634,7 +709,9 @@ func TestMountShare_MkdirFailureSurfaced(t *testing.T) {
 
 // --- CreateAutomount --------------------------------------------------------
 
-func TestCreateAutomount_BakesNegotiatedVersionAndTriggersViaAutofs(t *testing.T) {
+func TestCreateAutomount_BakesNegotiatedVersionAndTriggersViaAutofs(
+	t *testing.T,
+) {
 	f := &fakeSys{}
 	f.respond = func(name string, args []string, stdin string) (string, error) {
 		if name == "systemd-escape" {
@@ -657,7 +734,10 @@ func TestCreateAutomount_BakesNegotiatedVersionAndTriggersViaAutofs(t *testing.T
 	}
 
 	// Probe laddered to the working dialect.
-	if !reflect.DeepEqual(f.mountAttempts(), []string{"3.1.1", "3.0", "2.1", "2.0"}) {
+	if !reflect.DeepEqual(
+		f.mountAttempts(),
+		[]string{"3.1.1", "3.0", "2.1", "2.0"},
+	) {
 		t.Errorf("probe attempts = %v", f.mountAttempts())
 	}
 
@@ -672,7 +752,8 @@ func TestCreateAutomount_BakesNegotiatedVersionAndTriggersViaAutofs(t *testing.T
 	if strings.Contains(unit, "vers=3") {
 		t.Errorf(".mount unit pinned a rejected dialect: %q", unit)
 	}
-	if !strings.Contains(unit, "Type=cifs") || !strings.Contains(unit, "_netdev") {
+	if !strings.Contains(unit, "Type=cifs") ||
+		!strings.Contains(unit, "_netdev") {
 		t.Errorf(".mount unit malformed: %q", unit)
 	}
 
@@ -726,9 +807,12 @@ func TestCreateAutomount_ProbeFailureReturnsError(t *testing.T) {
 	err := CreateAutomount(AutomountConfig{
 		Share:      Share{Path: "//h/s"},
 		MountPoint: "/mnt/smb/h/s",
-		Options:    MountOptions{Creds: Credentials{Username: "zrk", Password: "x"}},
+		Options: MountOptions{
+			Creds: Credentials{Username: "zrk", Password: "x"},
+		},
 	})
-	if err == nil || !strings.Contains(err.Error(), "could not negotiate an SMB dialect") {
+	if err == nil ||
+		!strings.Contains(err.Error(), "could not negotiate an SMB dialect") {
 		t.Fatalf("err = %v, want negotiation failure", err)
 	}
 	// No unit files should be written if the probe never succeeds.
@@ -746,9 +830,11 @@ func TestListShares(t *testing.T) {
 	zrkshare        Disk      stuff
 	IPC$            IPC       IPC Service
 `
-	f := &fakeSys{respond: func(name string, args []string, _ string) (string, error) {
-		return out, nil
-	}}
+	f := &fakeSys{
+		respond: func(name string, args []string, _ string) (string, error) {
+			return out, nil
+		},
+	}
 	defer f.install()()
 
 	shares, err := ListShares(context.Background(), "10.0.1.97", Credentials{})
@@ -765,12 +851,14 @@ func TestListShares(t *testing.T) {
 }
 
 func TestListShares_CredsUseUsernameFlag(t *testing.T) {
-	f := &fakeSys{respond: func(name string, args []string, stdin string) (string, error) {
-		if stdin != "pw\n" {
-			t.Errorf("password not piped via stdin, got %q", stdin)
-		}
-		return "", nil
-	}}
+	f := &fakeSys{
+		respond: func(name string, args []string, stdin string) (string, error) {
+			if stdin != "pw\n" {
+				t.Errorf("password not piped via stdin, got %q", stdin)
+			}
+			return "", nil
+		},
+	}
 	defer f.install()()
 
 	if _, err := ListShares(context.Background(), "h", Credentials{Username: "zrk", Password: "pw", Domain: "WG"}); err != nil {
@@ -782,9 +870,11 @@ func TestListShares_CredsUseUsernameFlag(t *testing.T) {
 }
 
 func TestListShares_ErrorWithNoOutput(t *testing.T) {
-	f := &fakeSys{respond: func(name string, args []string, _ string) (string, error) {
-		return "", fmt.Errorf("connection refused")
-	}}
+	f := &fakeSys{
+		respond: func(name string, args []string, _ string) (string, error) {
+			return "", fmt.Errorf("connection refused")
+		},
+	}
 	defer f.install()()
 
 	if _, err := ListShares(context.Background(), "h", Credentials{}); err == nil {
@@ -795,12 +885,14 @@ func TestListShares_ErrorWithNoOutput(t *testing.T) {
 // --- fillDiskUsage ----------------------------------------------------------
 
 func TestFillDiskUsage(t *testing.T) {
-	f := &fakeSys{respond: func(name string, args []string, _ string) (string, error) {
-		if name == "df" {
-			return "Size Used Avail\n1000 400 600\n", nil
-		}
-		return "", nil
-	}}
+	f := &fakeSys{
+		respond: func(name string, args []string, _ string) (string, error) {
+			if name == "df" {
+				return "Size Used Avail\n1000 400 600\n", nil
+			}
+			return "", nil
+		},
+	}
 	defer f.install()()
 
 	s := &Share{MountPoint: "/mnt/smb/h/s"}
@@ -821,9 +913,11 @@ func TestFillDiskUsage_NoMountPointIsNoop(t *testing.T) {
 }
 
 func TestFillDiskUsage_ErrorLeavesZero(t *testing.T) {
-	f := &fakeSys{respond: func(name string, args []string, _ string) (string, error) {
-		return "", fmt.Errorf("df: no such file")
-	}}
+	f := &fakeSys{
+		respond: func(name string, args []string, _ string) (string, error) {
+			return "", fmt.Errorf("df: no such file")
+		},
+	}
 	defer f.install()()
 	s := &Share{MountPoint: "/mnt/x"}
 	fillDiskUsage(s)
@@ -835,9 +929,11 @@ func TestFillDiskUsage_ErrorLeavesZero(t *testing.T) {
 // --- CheckConnectivity ------------------------------------------------------
 
 func TestCheckConnectivity_OK(t *testing.T) {
-	f := &fakeSys{respond: func(name string, args []string, _ string) (string, error) {
-		return "", nil // smbclient succeeds
-	}}
+	f := &fakeSys{
+		respond: func(name string, args []string, _ string) (string, error) {
+			return "", nil // smbclient succeeds
+		},
+	}
 	defer f.install()()
 	if _, err := CheckConnectivity("h"); err != nil {
 		t.Fatalf("expected reachable, got %v", err)
@@ -845,12 +941,14 @@ func TestCheckConnectivity_OK(t *testing.T) {
 }
 
 func TestCheckConnectivity_SMBDownButPingUp(t *testing.T) {
-	f := &fakeSys{respond: func(name string, args []string, _ string) (string, error) {
-		if name == "smbclient" {
-			return "", fmt.Errorf("NT_STATUS_CONNECTION_REFUSED")
-		}
-		return "", nil // ping succeeds
-	}}
+	f := &fakeSys{
+		respond: func(name string, args []string, _ string) (string, error) {
+			if name == "smbclient" {
+				return "", fmt.Errorf("NT_STATUS_CONNECTION_REFUSED")
+			}
+			return "", nil // ping succeeds
+		},
+	}
 	defer f.install()()
 	_, err := CheckConnectivity("h")
 	if err == nil || !strings.Contains(err.Error(), "SMB service unavailable") {
@@ -859,9 +957,11 @@ func TestCheckConnectivity_SMBDownButPingUp(t *testing.T) {
 }
 
 func TestCheckConnectivity_HostUnreachable(t *testing.T) {
-	f := &fakeSys{respond: func(name string, args []string, _ string) (string, error) {
-		return "", fmt.Errorf("down") // both smbclient and ping fail
-	}}
+	f := &fakeSys{
+		respond: func(name string, args []string, _ string) (string, error) {
+			return "", fmt.Errorf("down") // both smbclient and ping fail
+		},
+	}
 	defer f.install()()
 	_, err := CheckConnectivity("h")
 	if err == nil || !strings.Contains(err.Error(), "host unreachable") {
@@ -875,34 +975,40 @@ func TestGetAutomounts(t *testing.T) {
 	list := "mnt-smb-h-s.automount loaded active waiting Automount /mnt/smb/h/s\n" +
 		"proc-sys-fs-binfmt_misc.automount loaded active waiting Arbitrary...\n" +
 		"some.service loaded active running\n"
-	f := &fakeSys{respond: func(name string, args []string, _ string) (string, error) {
-		if len(args) > 0 && args[0] == "list-units" {
-			return list, nil
-		}
-		if len(args) > 0 && args[0] == "show" {
-			if strings.Contains(args[1], "mnt-smb-h-s") {
-				return "What=//h/s\nWhere=/mnt/smb/h/s\nOptions=vers=2.0\n", nil
+	f := &fakeSys{
+		respond: func(name string, args []string, _ string) (string, error) {
+			if len(args) > 0 && args[0] == "list-units" {
+				return list, nil
 			}
-			return "What=binfmt_misc\nWhere=/proc/sys/fs/binfmt_misc\n", nil
-		}
-		return "", nil
-	}}
+			if len(args) > 0 && args[0] == "show" {
+				if strings.Contains(args[1], "mnt-smb-h-s") {
+					return "What=//h/s\nWhere=/mnt/smb/h/s\nOptions=vers=2.0\n", nil
+				}
+				return "What=binfmt_misc\nWhere=/proc/sys/fs/binfmt_misc\n", nil
+			}
+			return "", nil
+		},
+	}
 	defer f.install()()
 
 	cfgs, err := GetAutomounts()
 	if err != nil {
 		t.Fatalf("GetAutomounts error: %v", err)
 	}
-	// Only the CIFS UNC automount is kept; binfmt is filtered by parseAutomountShow.
-	if len(cfgs) != 1 || cfgs[0].Share.Host != "h" || cfgs[0].MountPoint != "/mnt/smb/h/s" {
+	// Only the CIFS UNC automount is kept; binfmt is filtered by
+	// parseAutomountShow.
+	if len(cfgs) != 1 || cfgs[0].Share.Host != "h" ||
+		cfgs[0].MountPoint != "/mnt/smb/h/s" {
 		t.Fatalf("cfgs = %+v", cfgs)
 	}
 }
 
 func TestGetAutomounts_ListError(t *testing.T) {
-	f := &fakeSys{respond: func(name string, args []string, _ string) (string, error) {
-		return "", fmt.Errorf("systemctl unavailable")
-	}}
+	f := &fakeSys{
+		respond: func(name string, args []string, _ string) (string, error) {
+			return "", fmt.Errorf("systemctl unavailable")
+		},
+	}
 	defer f.install()()
 	if _, err := GetAutomounts(); err == nil {
 		t.Fatal("expected error when list-units fails")
@@ -924,14 +1030,18 @@ func TestAddFstabEntry_WritesNegotiatedEntry(t *testing.T) {
 	}
 
 	// The probe laddered to the working dialect and the entry pins it.
-	if !reflect.DeepEqual(f.mountAttempts(), []string{"3.1.1", "3.0", "2.1", "2.0"}) {
+	if !reflect.DeepEqual(
+		f.mountAttempts(),
+		[]string{"3.1.1", "3.0", "2.1", "2.0"},
+	) {
 		t.Errorf("probe attempts = %v", f.mountAttempts())
 	}
 
 	// The final append goes through `sudo bash -c "echo ... >> /etc/fstab"`.
 	var entry string
 	for _, c := range f.calls {
-		if c.name == "sudo" && len(c.args) >= 3 && c.args[0] == "bash" && c.args[1] == "-c" {
+		if c.name == "sudo" && len(c.args) >= 3 && c.args[0] == "bash" &&
+			c.args[1] == "-c" {
 			entry = c.args[2]
 		}
 	}
@@ -952,8 +1062,12 @@ func TestAddFstabEntry_NegotiationFailureReturnsError(t *testing.T) {
 	f := &fakeSys{respond: mountResponder("nope")}
 	defer f.install()()
 
-	err := AddFstabEntry(Share{Path: "//h/s"}, MountOptions{MountPoint: "/mnt/x"})
-	if err == nil || !strings.Contains(err.Error(), "could not negotiate an SMB dialect") {
+	err := AddFstabEntry(
+		Share{Path: "//h/s"},
+		MountOptions{MountPoint: "/mnt/x"},
+	)
+	if err == nil ||
+		!strings.Contains(err.Error(), "could not negotiate an SMB dialect") {
 		t.Fatalf("err = %v, want negotiation failure", err)
 	}
 	if f.contains("bash -c") {
@@ -962,30 +1076,45 @@ func TestAddFstabEntry_NegotiationFailureReturnsError(t *testing.T) {
 }
 
 func TestAddFstabEntry_AppendFails(t *testing.T) {
-	f := &fakeSys{respond: func(name string, args []string, stdin string) (string, error) {
-		if name == "sudo" && len(args) >= 2 && args[0] == "bash" && args[1] == "-c" {
-			return "read-only fs", fmt.Errorf("exit 1")
-		}
-		return mountResponder("2.0")(name, args, stdin)
-	}}
+	f := &fakeSys{
+		respond: func(name string, args []string, stdin string) (string, error) {
+			if name == "sudo" && len(args) >= 2 && args[0] == "bash" &&
+				args[1] == "-c" {
+				return "read-only fs", fmt.Errorf("exit 1")
+			}
+			return mountResponder("2.0")(name, args, stdin)
+		},
+	}
 	defer f.install()()
-	err := AddFstabEntry(Share{Path: "//h/s"}, MountOptions{MountPoint: "/mnt/x"})
-	if err == nil || !strings.Contains(err.Error(), "failed to add fstab entry") {
+	err := AddFstabEntry(
+		Share{Path: "//h/s"},
+		MountOptions{MountPoint: "/mnt/x"},
+	)
+	if err == nil ||
+		!strings.Contains(err.Error(), "failed to add fstab entry") {
 		t.Fatalf("err = %v", err)
 	}
 }
 
 func TestAddFstabEntry_CredWriteFails(t *testing.T) {
-	f := &fakeSys{respond: func(name string, args []string, _ string) (string, error) {
-		if name == "sudo" && len(args) >= 2 && args[1] == "tee" {
-			return "denied", fmt.Errorf("exit 1")
-		}
-		return "", nil
-	}}
+	f := &fakeSys{
+		respond: func(name string, args []string, _ string) (string, error) {
+			if name == "sudo" && len(args) >= 2 && args[1] == "tee" {
+				return "denied", fmt.Errorf("exit 1")
+			}
+			return "", nil
+		},
+	}
 	defer f.install()()
-	err := AddFstabEntry(Share{Host: "h", Name: "s", Path: "//h/s"},
-		MountOptions{MountPoint: "/mnt/x", Creds: Credentials{Username: "u", Password: "p"}})
-	if err == nil || !strings.Contains(err.Error(), "failed to write credentials") {
+	err := AddFstabEntry(
+		Share{Host: "h", Name: "s", Path: "//h/s"},
+		MountOptions{
+			MountPoint: "/mnt/x",
+			Creds:      Credentials{Username: "u", Password: "p"},
+		},
+	)
+	if err == nil ||
+		!strings.Contains(err.Error(), "failed to write credentials") {
 		t.Fatalf("err = %v", err)
 	}
 }
@@ -996,7 +1125,14 @@ func TestAddFstabEntry_CredsWriteCredFile(t *testing.T) {
 
 	err := AddFstabEntry(
 		Share{Host: "h", Name: "s", Path: "//h/s"},
-		MountOptions{MountPoint: "/mnt/smb/h/s", Creds: Credentials{Username: "zrk", Password: "pw", Domain: "WG"}},
+		MountOptions{
+			MountPoint: "/mnt/smb/h/s",
+			Creds: Credentials{
+				Username: "zrk",
+				Password: "pw",
+				Domain:   "WG",
+			},
+		},
 	)
 	if err != nil {
 		t.Fatalf("AddFstabEntry error: %v", err)
@@ -1050,18 +1186,24 @@ func TestMountShare_ReadOnlyAndDomainOptions(t *testing.T) {
 }
 
 func TestMountShare_MkdirFailAfterClear(t *testing.T) {
-	f := &fakeSys{respond: func(name string, args []string, _ string) (string, error) {
-		if name == "systemd-escape" {
-			return "mnt-smb-h-s", nil
-		}
-		if name == "sudo" && len(args) >= 2 && args[1] == "mkdir" {
-			return "denied", fmt.Errorf("exit 1")
-		}
-		return "", nil
-	}}
+	f := &fakeSys{
+		respond: func(name string, args []string, _ string) (string, error) {
+			if name == "systemd-escape" {
+				return "mnt-smb-h-s", nil
+			}
+			if name == "sudo" && len(args) >= 2 && args[1] == "mkdir" {
+				return "denied", fmt.Errorf("exit 1")
+			}
+			return "", nil
+		},
+	}
 	defer f.install()()
-	err := MountShare(Share{Host: "h", Name: "s", Path: "//h/s"}, MountOptions{})
-	if err == nil || !strings.Contains(err.Error(), "failed to create mount point") {
+	err := MountShare(
+		Share{Host: "h", Name: "s", Path: "//h/s"},
+		MountOptions{},
+	)
+	if err == nil ||
+		!strings.Contains(err.Error(), "failed to create mount point") {
 		t.Fatalf("err = %v", err)
 	}
 }
@@ -1093,12 +1235,14 @@ func TestForceUnmountShare(t *testing.T) {
 // --- RemoveAutomount --------------------------------------------------------
 
 func TestRemoveAutomount(t *testing.T) {
-	f := &fakeSys{respond: func(name string, args []string, _ string) (string, error) {
-		if name == "systemd-escape" {
-			return "mnt-smb-h-s", nil
-		}
-		return "", nil
-	}}
+	f := &fakeSys{
+		respond: func(name string, args []string, _ string) (string, error) {
+			if name == "systemd-escape" {
+				return "mnt-smb-h-s", nil
+			}
+			return "", nil
+		},
+	}
 	defer f.install()()
 
 	if err := RemoveAutomount("/mnt/smb/h/s"); err != nil {
@@ -1117,15 +1261,17 @@ func TestRemoveAutomount(t *testing.T) {
 }
 
 func TestRemoveAutomount_StopFails(t *testing.T) {
-	f := &fakeSys{respond: func(name string, args []string, _ string) (string, error) {
-		if name == "systemd-escape" {
-			return "mnt-smb-h-s", nil
-		}
-		if name == "sudo" && len(args) >= 3 && args[2] == "stop" {
-			return "unit not loaded", fmt.Errorf("exit 1")
-		}
-		return "", nil
-	}}
+	f := &fakeSys{
+		respond: func(name string, args []string, _ string) (string, error) {
+			if name == "systemd-escape" {
+				return "mnt-smb-h-s", nil
+			}
+			if name == "sudo" && len(args) >= 3 && args[2] == "stop" {
+				return "unit not loaded", fmt.Errorf("exit 1")
+			}
+			return "", nil
+		},
+	}
 	defer f.install()()
 	if err := RemoveAutomount("/mnt/smb/h/s"); err == nil {
 		t.Fatal("expected error when stop fails")
@@ -1134,15 +1280,17 @@ func TestRemoveAutomount_StopFails(t *testing.T) {
 
 func TestRemoveAutomount_RmFails(t *testing.T) {
 	// systemd-escape failing exercises the manual-fallback unit name too.
-	f := &fakeSys{respond: func(name string, args []string, _ string) (string, error) {
-		if name == "systemd-escape" {
-			return "", fmt.Errorf("not found")
-		}
-		if name == "sudo" && len(args) >= 2 && args[1] == "rm" {
-			return "busy", fmt.Errorf("exit 1")
-		}
-		return "", nil
-	}}
+	f := &fakeSys{
+		respond: func(name string, args []string, _ string) (string, error) {
+			if name == "systemd-escape" {
+				return "", fmt.Errorf("not found")
+			}
+			if name == "sudo" && len(args) >= 2 && args[1] == "rm" {
+				return "busy", fmt.Errorf("exit 1")
+			}
+			return "", nil
+		},
+	}
 	defer f.install()()
 	err := RemoveAutomount("/mnt/smb/h/s")
 	if err == nil || !strings.Contains(err.Error(), "remove unit files") {
@@ -1155,15 +1303,17 @@ func TestRemoveAutomount_RmFails(t *testing.T) {
 }
 
 func TestGetAutomounts_ShowErrorSkipsUnit(t *testing.T) {
-	f := &fakeSys{respond: func(name string, args []string, _ string) (string, error) {
-		if len(args) > 0 && args[0] == "list-units" {
-			return "mnt-smb-h-s.automount loaded active waiting Automount /mnt/smb/h/s\n", nil
-		}
-		if len(args) > 0 && args[0] == "show" {
-			return "", fmt.Errorf("no such unit")
-		}
-		return "", nil
-	}}
+	f := &fakeSys{
+		respond: func(name string, args []string, _ string) (string, error) {
+			if len(args) > 0 && args[0] == "list-units" {
+				return "mnt-smb-h-s.automount loaded active waiting Automount /mnt/smb/h/s\n", nil
+			}
+			if len(args) > 0 && args[0] == "show" {
+				return "", fmt.Errorf("no such unit")
+			}
+			return "", nil
+		},
+	}
 	defer f.install()()
 	cfgs, err := GetAutomounts()
 	if err != nil {
@@ -1178,9 +1328,11 @@ func TestGetAutomounts_ShowErrorSkipsUnit(t *testing.T) {
 
 func TestDiscoverAvahi(t *testing.T) {
 	out := "=;eth0;IPv4;NAS;_smb._tcp;local;nas.local;10.0.1.97;445;\n"
-	f := &fakeSys{respond: func(name string, args []string, _ string) (string, error) {
-		return out, nil
-	}}
+	f := &fakeSys{
+		respond: func(name string, args []string, _ string) (string, error) {
+			return out, nil
+		},
+	}
 	defer f.install()()
 	hosts, err := discoverAvahi(context.Background())
 	if err != nil || len(hosts) != 1 || hosts[0].IP != "10.0.1.97" {
@@ -1189,9 +1341,11 @@ func TestDiscoverAvahi(t *testing.T) {
 }
 
 func TestDiscoverAvahi_Error(t *testing.T) {
-	f := &fakeSys{respond: func(name string, args []string, _ string) (string, error) {
-		return "", fmt.Errorf("avahi-browse: not found")
-	}}
+	f := &fakeSys{
+		respond: func(name string, args []string, _ string) (string, error) {
+			return "", fmt.Errorf("avahi-browse: not found")
+		},
+	}
 	defer f.install()()
 	if _, err := discoverAvahi(context.Background()); err == nil {
 		t.Fatal("expected error")
@@ -1199,12 +1353,14 @@ func TestDiscoverAvahi_Error(t *testing.T) {
 }
 
 func TestDiscoverNMB(t *testing.T) {
-	f := &fakeSys{respond: func(name string, args []string, _ string) (string, error) {
-		if strings.Contains(strings.Join(args, " "), "__SAMBA__") {
-			return "x\n10.0.1.97       NAS\n", nil
-		}
-		return "", nil
-	}}
+	f := &fakeSys{
+		respond: func(name string, args []string, _ string) (string, error) {
+			if strings.Contains(strings.Join(args, " "), "__SAMBA__") {
+				return "x\n10.0.1.97       NAS\n", nil
+			}
+			return "", nil
+		},
+	}
 	defer f.install()()
 	hosts, err := discoverNMB(context.Background())
 	if err != nil || len(hosts) != 1 || hosts[0].Name != "NAS" {
@@ -1215,18 +1371,20 @@ func TestDiscoverNMB(t *testing.T) {
 func TestDiscoverHosts_MergesAndDedupes(t *testing.T) {
 	// avahi and nmb both surface 10.0.1.97; it must appear once. Subnet scan is
 	// short-circuited by an already-cancelled context.
-	f := &fakeSys{respond: func(name string, args []string, _ string) (string, error) {
-		switch name {
-		case "avahi-browse":
-			return "=;eth0;IPv4;NAS;_smb._tcp;local;nas.local;10.0.1.97;445;\n", nil
-		case "nmblookup":
-			if strings.Contains(strings.Join(args, " "), "__SAMBA__") {
-				return "x\n10.0.1.97       NAS\n10.0.1.50       OTHER\n", nil
+	f := &fakeSys{
+		respond: func(name string, args []string, _ string) (string, error) {
+			switch name {
+			case "avahi-browse":
+				return "=;eth0;IPv4;NAS;_smb._tcp;local;nas.local;10.0.1.97;445;\n", nil
+			case "nmblookup":
+				if strings.Contains(strings.Join(args, " "), "__SAMBA__") {
+					return "x\n10.0.1.97       NAS\n10.0.1.50       OTHER\n", nil
+				}
+				return "", nil
 			}
 			return "", nil
-		}
-		return "", nil
-	}}
+		},
+	}
 	defer f.install()()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -1241,7 +1399,11 @@ func TestDiscoverHosts_MergesAndDedupes(t *testing.T) {
 		ips[h.IP]++
 	}
 	if ips["10.0.1.97"] != 1 {
-		t.Errorf("10.0.1.97 should appear once, got %d (hosts=%+v)", ips["10.0.1.97"], hosts)
+		t.Errorf(
+			"10.0.1.97 should appear once, got %d (hosts=%+v)",
+			ips["10.0.1.97"],
+			hosts,
+		)
 	}
 	if ips["10.0.1.50"] != 1 {
 		t.Errorf("10.0.1.50 missing (hosts=%+v)", hosts)
@@ -1251,10 +1413,12 @@ func TestDiscoverHosts_MergesAndDedupes(t *testing.T) {
 // --- /proc and /etc readers (real files on Linux) --------------------------
 
 func TestGetMountedShares(t *testing.T) {
-	f := &fakeSys{respond: func(name string, args []string, _ string) (string, error) {
-		// df, if any cifs mount happens to be present
-		return "Size Used Avail\n1 1 1\n", nil
-	}}
+	f := &fakeSys{
+		respond: func(name string, args []string, _ string) (string, error) {
+			// df, if any cifs mount happens to be present
+			return "Size Used Avail\n1 1 1\n", nil
+		},
+	}
 	defer f.install()()
 	if _, err := GetMountedShares(); err != nil {
 		t.Fatalf("GetMountedShares should read /proc/mounts: %v", err)
@@ -1270,20 +1434,25 @@ func TestGetFstabEntries(t *testing.T) {
 // --- sudo helpers error paths ----------------------------------------------
 
 func TestSudoRun_PasswordRequired(t *testing.T) {
-	f := &fakeSys{respond: func(name string, args []string, _ string) (string, error) {
-		return "sudo: a password is required", fmt.Errorf("exit 1")
-	}}
+	f := &fakeSys{
+		respond: func(name string, args []string, _ string) (string, error) {
+			return "sudo: a password is required", fmt.Errorf("exit 1")
+		},
+	}
 	defer f.install()()
 	err := sudoRun("umount", "/x")
-	if err == nil || !strings.Contains(err.Error(), "sudo requires a password") {
+	if err == nil ||
+		!strings.Contains(err.Error(), "sudo requires a password") {
 		t.Fatalf("err = %v", err)
 	}
 }
 
 func TestSudoRun_GenericError(t *testing.T) {
-	f := &fakeSys{respond: func(name string, args []string, _ string) (string, error) {
-		return "umount: not mounted", fmt.Errorf("exit 1")
-	}}
+	f := &fakeSys{
+		respond: func(name string, args []string, _ string) (string, error) {
+			return "umount: not mounted", fmt.Errorf("exit 1")
+		},
+	}
 	defer f.install()()
 	err := sudoRun("umount", "/x")
 	if err == nil || !strings.Contains(err.Error(), "not mounted") {
@@ -1292,20 +1461,25 @@ func TestSudoRun_GenericError(t *testing.T) {
 }
 
 func TestSudoWrite_PasswordRequired(t *testing.T) {
-	f := &fakeSys{respond: func(name string, args []string, _ string) (string, error) {
-		return "sudo: password is required", fmt.Errorf("exit 1")
-	}}
+	f := &fakeSys{
+		respond: func(name string, args []string, _ string) (string, error) {
+			return "sudo: password is required", fmt.Errorf("exit 1")
+		},
+	}
 	defer f.install()()
 	err := sudoWrite("/etc/x", "data")
-	if err == nil || !strings.Contains(err.Error(), "sudo requires a password") {
+	if err == nil ||
+		!strings.Contains(err.Error(), "sudo requires a password") {
 		t.Fatalf("err = %v", err)
 	}
 }
 
 func TestSudoWrite_GenericError(t *testing.T) {
-	f := &fakeSys{respond: func(name string, args []string, _ string) (string, error) {
-		return "permission denied", fmt.Errorf("exit 1")
-	}}
+	f := &fakeSys{
+		respond: func(name string, args []string, _ string) (string, error) {
+			return "permission denied", fmt.Errorf("exit 1")
+		},
+	}
 	defer f.install()()
 	err := sudoWrite("/etc/x", "data")
 	if err == nil || !strings.Contains(err.Error(), "permission denied") {
@@ -1328,13 +1502,19 @@ func TestCreateAutomount_GuestPath(t *testing.T) {
 	err := CreateAutomount(AutomountConfig{
 		Share:      Share{Host: "h", Name: "s", Path: "//h/s"},
 		MountPoint: "/mnt/smb/h/s",
-		Options:    MountOptions{UID: "1000", GID: "1000", FileMode: "0755", DirMode: "0755"},
+		Options: MountOptions{
+			UID:      "1000",
+			GID:      "1000",
+			FileMode: "0755",
+			DirMode:  "0755",
+		},
 	})
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
 	unit, ok := f.stdinForTee(".mount")
-	if !ok || !strings.Contains(unit, "guest") || !strings.Contains(unit, "sec=none") {
+	if !ok || !strings.Contains(unit, "guest") ||
+		!strings.Contains(unit, "sec=none") {
 		t.Errorf("guest unit malformed: %q", unit)
 	}
 	// No credential file should be written for a guest mount.
@@ -1344,21 +1524,28 @@ func TestCreateAutomount_GuestPath(t *testing.T) {
 }
 
 func TestCreateAutomount_CredWriteFails(t *testing.T) {
-	f := &fakeSys{respond: func(name string, args []string, _ string) (string, error) {
-		if name == "systemd-escape" {
-			return "mnt-smb-h-s", nil
-		}
-		if name == "sudo" && len(args) >= 2 && args[1] == "tee" {
-			return "denied", fmt.Errorf("exit 1")
-		}
-		return "", nil
-	}}
+	f := &fakeSys{
+		respond: func(name string, args []string, _ string) (string, error) {
+			if name == "systemd-escape" {
+				return "mnt-smb-h-s", nil
+			}
+			if name == "sudo" && len(args) >= 2 && args[1] == "tee" {
+				return "denied", fmt.Errorf("exit 1")
+			}
+			return "", nil
+		},
+	}
 	defer f.install()()
 	err := CreateAutomount(AutomountConfig{
-		Share: Share{Host: "h", Name: "s", Path: "//h/s"}, MountPoint: "/mnt/smb/h/s",
+		Share: Share{
+			Host: "h",
+			Name: "s",
+			Path: "//h/s",
+		}, MountPoint: "/mnt/smb/h/s",
 		Options: MountOptions{Creds: Credentials{Username: "u", Password: "p"}},
 	})
-	if err == nil || !strings.Contains(err.Error(), "failed to write credentials") {
+	if err == nil ||
+		!strings.Contains(err.Error(), "failed to write credentials") {
 		t.Fatalf("err = %v", err)
 	}
 }
@@ -1370,34 +1557,53 @@ func TestCreateAutomount_WriteMountUnitFails(t *testing.T) {
 			return "mnt-smb-h-s", nil
 		}
 		// Guest mount (no cred tee); fail only the unit-file tee.
-		if name == "sudo" && len(args) >= 3 && args[1] == "tee" && strings.HasSuffix(args[2], ".mount") {
+		if name == "sudo" && len(args) >= 3 && args[1] == "tee" &&
+			strings.HasSuffix(args[2], ".mount") {
 			return "ro fs", fmt.Errorf("exit 1")
 		}
 		return mountResponder("2.0")(name, args, stdin)
 	}
 	defer f.install()()
 	err := CreateAutomount(AutomountConfig{
-		Share: Share{Host: "h", Name: "s", Path: "//h/s"}, MountPoint: "/mnt/smb/h/s",
-		Options: MountOptions{UID: "1000", GID: "1000", FileMode: "0755", DirMode: "0755"},
+		Share: Share{
+			Host: "h",
+			Name: "s",
+			Path: "//h/s",
+		}, MountPoint: "/mnt/smb/h/s",
+		Options: MountOptions{
+			UID:      "1000",
+			GID:      "1000",
+			FileMode: "0755",
+			DirMode:  "0755",
+		},
 	})
-	if err == nil || !strings.Contains(err.Error(), "failed to write mount unit") {
+	if err == nil ||
+		!strings.Contains(err.Error(), "failed to write mount unit") {
 		t.Fatalf("err = %v", err)
 	}
 }
 
 func TestCreateAutomount_MkdirFails(t *testing.T) {
-	f := &fakeSys{respond: func(name string, args []string, _ string) (string, error) {
-		if name == "systemd-escape" {
-			return "mnt-smb-h-s", nil
-		}
-		if name == "sudo" && len(args) >= 2 && args[1] == "mkdir" {
-			return "denied", fmt.Errorf("exit 1")
-		}
-		return "", nil
-	}}
+	f := &fakeSys{
+		respond: func(name string, args []string, _ string) (string, error) {
+			if name == "systemd-escape" {
+				return "mnt-smb-h-s", nil
+			}
+			if name == "sudo" && len(args) >= 2 && args[1] == "mkdir" {
+				return "denied", fmt.Errorf("exit 1")
+			}
+			return "", nil
+		},
+	}
 	defer f.install()()
-	err := CreateAutomount(AutomountConfig{Share: Share{Path: "//h/s"}, MountPoint: "/mnt/smb/h/s"})
-	if err == nil || !strings.Contains(err.Error(), "failed to create mount point") {
+	err := CreateAutomount(
+		AutomountConfig{
+			Share:      Share{Path: "//h/s"},
+			MountPoint: "/mnt/smb/h/s",
+		},
+	)
+	if err == nil ||
+		!strings.Contains(err.Error(), "failed to create mount point") {
 		t.Fatalf("err = %v", err)
 	}
 }
@@ -1408,15 +1614,25 @@ func TestCreateAutomount_EnableFails(t *testing.T) {
 		if name == "systemd-escape" {
 			return "mnt-smb-h-s", nil
 		}
-		if name == "sudo" && len(args) >= 3 && args[1] == "systemctl" && args[2] == "enable" {
+		if name == "sudo" && len(args) >= 3 && args[1] == "systemctl" &&
+			args[2] == "enable" {
 			return "enable boom", fmt.Errorf("exit 1")
 		}
 		return mountResponder("2.0")(name, args, stdin)
 	}
 	defer f.install()()
 	err := CreateAutomount(AutomountConfig{
-		Share: Share{Host: "h", Name: "s", Path: "//h/s"}, MountPoint: "/mnt/smb/h/s",
-		Options: MountOptions{UID: "1000", GID: "1000", FileMode: "0755", DirMode: "0755"},
+		Share: Share{
+			Host: "h",
+			Name: "s",
+			Path: "//h/s",
+		}, MountPoint: "/mnt/smb/h/s",
+		Options: MountOptions{
+			UID:      "1000",
+			GID:      "1000",
+			FileMode: "0755",
+			DirMode:  "0755",
+		},
 	})
 	if err == nil || !strings.Contains(err.Error(), "enable failed") {
 		t.Fatalf("err = %v", err)
@@ -1429,15 +1645,26 @@ func TestCreateAutomount_StartFails(t *testing.T) {
 		if name == "systemd-escape" {
 			return "mnt-smb-h-s", nil
 		}
-		if name == "sudo" && len(args) >= 4 && args[1] == "systemctl" && args[2] == "start" && strings.HasSuffix(args[3], ".automount") {
+		if name == "sudo" && len(args) >= 4 && args[1] == "systemctl" &&
+			args[2] == "start" &&
+			strings.HasSuffix(args[3], ".automount") {
 			return "start boom", fmt.Errorf("exit 1")
 		}
 		return mountResponder("2.0")(name, args, stdin)
 	}
 	defer f.install()()
 	err := CreateAutomount(AutomountConfig{
-		Share: Share{Host: "h", Name: "s", Path: "//h/s"}, MountPoint: "/mnt/smb/h/s",
-		Options: MountOptions{UID: "1000", GID: "1000", FileMode: "0755", DirMode: "0755"},
+		Share: Share{
+			Host: "h",
+			Name: "s",
+			Path: "//h/s",
+		}, MountPoint: "/mnt/smb/h/s",
+		Options: MountOptions{
+			UID:      "1000",
+			GID:      "1000",
+			FileMode: "0755",
+			DirMode:  "0755",
+		},
 	})
 	if err == nil || !strings.Contains(err.Error(), "start failed") {
 		t.Fatalf("err = %v", err)
@@ -1450,7 +1677,8 @@ func TestCreateAutomount_DaemonReloadFails(t *testing.T) {
 		if name == "systemd-escape" {
 			return "mnt-smb-h-s", nil
 		}
-		if name == "sudo" && len(args) >= 3 && args[1] == "systemctl" && args[2] == "daemon-reload" {
+		if name == "sudo" && len(args) >= 3 && args[1] == "systemctl" &&
+			args[2] == "daemon-reload" {
 			return "reexec failed", fmt.Errorf("exit 1")
 		}
 		return mountResponder("2.0")(name, args, stdin)
@@ -1459,7 +1687,12 @@ func TestCreateAutomount_DaemonReloadFails(t *testing.T) {
 	err := CreateAutomount(AutomountConfig{
 		Share:      Share{Host: "h", Name: "s", Path: "//h/s"},
 		MountPoint: "/mnt/smb/h/s",
-		Options:    MountOptions{UID: "1000", GID: "1000", FileMode: "0755", DirMode: "0755"},
+		Options: MountOptions{
+			UID:      "1000",
+			GID:      "1000",
+			FileMode: "0755",
+			DirMode:  "0755",
+		},
 	})
 	if err == nil || !strings.Contains(err.Error(), "daemon-reload failed") {
 		t.Fatalf("err = %v", err)
@@ -1512,11 +1745,24 @@ func TestDetectAutomountIssues(t *testing.T) {
 		{"[Automount]\nWhere=/x\n", "", nil},
 		{cycleAutomountUnit, "success", []AutomountIssue{IssueBootCycle}},
 		{"[Automount]\n", "exit-code", []AutomountIssue{IssueMountFailing}},
-		{cycleAutomountUnit, "exit-code", []AutomountIssue{IssueBootCycle, IssueMountFailing}},
+		{
+			cycleAutomountUnit,
+			"exit-code",
+			[]AutomountIssue{IssueBootCycle, IssueMountFailing},
+		},
 	}
 	for _, c := range cases {
-		if got := detectAutomountIssues(c.unit, c.result); !reflect.DeepEqual(got, c.want) {
-			t.Errorf("detect(%q, %q) = %v, want %v", c.unit, c.result, got, c.want)
+		if got := detectAutomountIssues(c.unit, c.result); !reflect.DeepEqual(
+			got,
+			c.want,
+		) {
+			t.Errorf(
+				"detect(%q, %q) = %v, want %v",
+				c.unit,
+				c.result,
+				got,
+				c.want,
+			)
 		}
 	}
 }
@@ -1526,7 +1772,8 @@ func TestStripNetworkOrdering(t *testing.T) {
 	if strings.Contains(got, "network-online") {
 		t.Errorf("network ordering left in: %q", got)
 	}
-	if !strings.Contains(got, "Where=/mnt/smb/h/s") || !strings.Contains(got, "[Automount]") {
+	if !strings.Contains(got, "Where=/mnt/smb/h/s") ||
+		!strings.Contains(got, "[Automount]") {
 		t.Errorf("unrelated lines dropped: %q", got)
 	}
 }
@@ -1535,12 +1782,14 @@ func TestGetAutomounts_DetectsIssues(t *testing.T) {
 	defer fakeFiles(map[string]string{
 		"/etc/systemd/system/mnt-smb-h-s.automount": cycleAutomountUnit,
 	})()
-	f := &fakeSys{respond: func(name string, args []string, _ string) (string, error) {
-		if args[0] == "list-units" {
-			return "mnt-smb-h-s.automount loaded active waiting x\n", nil
-		}
-		return "What=//h/s\nWhere=/mnt/smb/h/s\nResult=exit-code\n", nil
-	}}
+	f := &fakeSys{
+		respond: func(name string, args []string, _ string) (string, error) {
+			if args[0] == "list-units" {
+				return "mnt-smb-h-s.automount loaded active waiting x\n", nil
+			}
+			return "What=//h/s\nWhere=/mnt/smb/h/s\nResult=exit-code\n", nil
+		},
+	}
 	defer f.install()()
 
 	cfgs, err := GetAutomounts()
@@ -1557,12 +1806,14 @@ func TestFixAutomount_BootCycle(t *testing.T) {
 	defer fakeFiles(map[string]string{
 		"/etc/systemd/system/mnt-smb-h-s.automount": cycleAutomountUnit,
 	})()
-	f := &fakeSys{respond: func(name string, args []string, _ string) (string, error) {
-		if name == "systemd-escape" {
-			return "mnt-smb-h-s", nil
-		}
-		return "", nil
-	}}
+	f := &fakeSys{
+		respond: func(name string, args []string, _ string) (string, error) {
+			if name == "systemd-escape" {
+				return "mnt-smb-h-s", nil
+			}
+			return "", nil
+		},
+	}
 	defer f.install()()
 
 	err := FixAutomount(AutomountConfig{
@@ -1614,11 +1865,17 @@ func TestFixAutomount_RenegotiatesDialect(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FixAutomount error: %v", err)
 	}
-	if !reflect.DeepEqual(f.mountAttempts(), []string{"3.1.1", "3.0", "2.1", "2.0"}) {
+	if !reflect.DeepEqual(
+		f.mountAttempts(),
+		[]string{"3.1.1", "3.0", "2.1", "2.0"},
+	) {
 		t.Errorf("probe attempts = %v", f.mountAttempts())
 	}
 	// The probe keeps the unit's other options (including credentials=).
-	if !strings.Contains(f.optStringFor("2.0"), "credentials=/etc/samba/credentials/mnt-smb-h-s") {
+	if !strings.Contains(
+		f.optStringFor("2.0"),
+		"credentials=/etc/samba/credentials/mnt-smb-h-s",
+	) {
 		t.Errorf("probe dropped unit options: %q", f.optStringFor("2.0"))
 	}
 	unit, ok := f.stdinForTee(".mount")
@@ -1632,7 +1889,11 @@ func TestFixAutomount_RenegotiatesDialect(t *testing.T) {
 	if !f.contains("systemctl reset-failed mnt-smb-h-s.mount") {
 		t.Error("missing reset-failed")
 	}
-	if f.index("systemctl start mnt-smb-h-s.automount") < f.index("tee /etc/systemd/system/mnt-smb-h-s.mount") {
+	if f.index(
+		"systemctl start mnt-smb-h-s.automount",
+	) < f.index(
+		"tee /etc/systemd/system/mnt-smb-h-s.mount",
+	) {
 		t.Error("automount must be restarted after the unit is rewritten")
 	}
 	if !f.contains("ls /mnt/smb/h/s") {
@@ -1674,12 +1935,14 @@ func TestFixAutomount_MissingOptions(t *testing.T) {
 	defer fakeFiles(map[string]string{
 		"/etc/systemd/system/mnt-smb-h-s.mount": "[Mount]\nWhat=//h/s\n",
 	})()
-	f := &fakeSys{respond: func(name string, args []string, _ string) (string, error) {
-		if name == "systemd-escape" {
-			return "mnt-smb-h-s", nil
-		}
-		return "", nil
-	}}
+	f := &fakeSys{
+		respond: func(name string, args []string, _ string) (string, error) {
+			if name == "systemd-escape" {
+				return "mnt-smb-h-s", nil
+			}
+			return "", nil
+		},
+	}
 	defer f.install()()
 
 	err := FixAutomount(AutomountConfig{
