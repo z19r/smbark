@@ -50,6 +50,11 @@ type AutomountCreateMsg struct {
 	Err    error
 }
 
+type AutomountFixMsg struct {
+	Config smb.AutomountConfig
+	Err    error
+}
+
 type AutomountRemoveMsg struct {
 	MountPoint string
 	Err        error
