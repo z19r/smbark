@@ -216,11 +216,16 @@ func DiscoverHosts(ctx context.Context) ([]Host, error) {
 	return hosts, nil
 }
 
+// routeProbeAddr is never contacted. Dialing UDP sends no packets; it only
+// makes the OS pick the outbound route, revealing which local IP the
+// default route uses. Any off-LAN address works; 192.0.2.1 is reserved
+// for documentation (RFC 5737) so it can't be mistaken for a real host.
+const routeProbeAddr = "192.0.2.1:9"
+
 func getLocalIP() (net.IP, error) {
 	// Prefer the default route's source address: the first interface is
-	// often a VPN (tailscale0) or docker bridge, not the LAN. UDP dial
-	// sends no packets, it only resolves the route.
-	if conn, err := net.Dial("udp4", "192.0.2.1:9"); err == nil {
+	// often a VPN (tailscale0) or docker bridge, not the LAN.
+	if conn, err := net.Dial("udp4", routeProbeAddr); err == nil {
 		defer conn.Close()
 		if a, ok := conn.LocalAddr().(*net.UDPAddr); ok &&
 			!a.IP.IsLoopback() && a.IP.To4() != nil {
