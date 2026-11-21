@@ -217,6 +217,17 @@ func DiscoverHosts(ctx context.Context) ([]Host, error) {
 }
 
 func getLocalIP() (net.IP, error) {
+	// Prefer the default route's source address: the first interface is
+	// often a VPN (tailscale0) or docker bridge, not the LAN. UDP dial
+	// sends no packets, it only resolves the route.
+	if conn, err := net.Dial("udp4", "192.0.2.1:9"); err == nil {
+		defer conn.Close()
+		if a, ok := conn.LocalAddr().(*net.UDPAddr); ok &&
+			!a.IP.IsLoopback() && a.IP.To4() != nil {
+			return a.IP.To4(), nil
+		}
+	}
+
 	addrs, err := net.InterfaceAddrs()
 	if err != nil {
 		return nil, err
