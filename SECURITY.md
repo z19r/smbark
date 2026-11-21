@@ -6,7 +6,7 @@ Security fixes are released for the latest published version of SMBark only.
 Please upgrade before reporting an issue.
 
 <!-- SUPPORTED_VERSION: updated automatically by `just release` -->
-The current supported release is **v1.3.0**.
+The current supported release is **v1.3.1**.
 
 ## Reporting a Vulnerability
 

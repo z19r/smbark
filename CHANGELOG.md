@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-11-21
+
+### Fixed
+
+- scan the default-route subnet, not the first interface (#25)
+
 ## [1.3.0] - 2026-10-29
 
 ### Added
@@ -75,10 +81,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fuzzy-search share filtering
 - Project site with Netlify deployment
 
-[Unreleased]: https://github.com/z19r/smbark/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/z19r/smbark/compare/v1.3.1...HEAD
 [1.0.0]: https://github.com/z19r/smbark/releases/tag/v1.0.0
 [1.0.1]: https://github.com/z19r/smbark/releases/tag/v1.0.1
 [1.1.0]: https://github.com/z19r/smbark/releases/tag/v1.1.0
 [1.2.0]: https://github.com/z19r/smbark/releases/tag/v1.2.0
 [1.2.1]: https://github.com/z19r/smbark/releases/tag/v1.2.1
 [1.3.0]: https://github.com/z19r/smbark/releases/tag/v1.3.0
+[1.3.1]: https://github.com/z19r/smbark/releases/tag/v1.3.1
